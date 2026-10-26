@@ -20,6 +20,9 @@ importers:
       '@vercel/node':
         specifier: ^27.0.2
         version: 27.0.2(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@vercel/build-utils@15.0.2)
+      '@vladmandic/face-api':
+        specifier: ^1.7.15
+        version: 1.7.15
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -925,6 +928,10 @@ packages:
         optional: true
       oxc-transform-react:
         optional: true
+
+  '@vladmandic/face-api@1.7.15':
+    resolution: {integrity: sha512-WDMmK3CfNLo8jylWqMoQgf4nIst3M0fzx1dnac96wv/dvMTN4DxC/Pq1DGtduDk1lktCamQ3MIDXFnvrdHTXDw==}
+    engines: {node: '>=14.0.0'}
 
   abbrev@3.0.1:
     resolution: {integrity: sha512-AO2ac6pjRB3SJmGJo+v5/aK6Omggp6fsLrs6wN9bd35ulu4cCwaAU9+7ZhXjeqHVkaHThLuzH0nZr0YpCDhygg==}
@@ -2248,6 +2255,8 @@ snapshots:
     dependencies:
       '@rolldown/pluginutils': 1.0.1
       vite: 8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)
+
+  '@vladmandic/face-api@1.7.15': {}
 
   abbrev@3.0.1: {}
 
