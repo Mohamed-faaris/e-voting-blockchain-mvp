@@ -2,24 +2,8 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.ts"
-    },
-    {
-      "source": "/chain(.*)",
-      "destination": "/api/index.ts"
-    },
-    {
-      "source": "/demo/(.*)",
-      "destination": "/api/index.ts"
-    },
-    {
-      "source": "/assets/(.*)",
-      "destination": "/public/assets/$1"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/public/index.html"
+      "destination": "/api/index.ts"
     }
   ]
 }

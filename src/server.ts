@@ -1,6 +1,6 @@
-import { serve } from "@hono/node-server";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { Hono } from "hono";
-import { serveStatic } from "@hono/node-server/serve-static";
 import {
   initStorage,
   appendDemoTransaction,
@@ -25,9 +25,6 @@ const app = new Hono();
 
 // Initialize Database (Turso or local)
 await initStorage();
-
-// Serve static frontend files
-app.use("/*", serveStatic({ root: "./public" }));
 
 // System info
 app.get("/api/info", (c) => c.json({
@@ -119,7 +116,7 @@ app.post("/api/voter/auth", async (c) => {
   return c.json(result);
 });
 
-// Cast vote endpoint (Full flow with token, encryption, and optional signature)
+// Cast vote endpoint
 app.post("/api/vote/cast", async (c) => {
   const body = await c.req.json().catch(() => null) as {
     districtId?: string;
@@ -167,7 +164,7 @@ app.post("/api/vote/cast", async (c) => {
   }
 });
 
-// Tally votes from blockchain blocks
+// Tally votes
 app.get("/api/tally", async (c) => {
   const chain = await getChain();
   const tally: Record<string, number> = {};
@@ -197,7 +194,7 @@ app.get("/api/tally", async (c) => {
   });
 });
 
-// Raw demo endpoints
+// Demo endpoints
 app.post("/demo/transactions", async (c) => {
   const body = await c.req.json().catch(() => null) as null | {
     districtId?: string; tokenId?: string; encryptedVote?: string;
@@ -232,8 +229,35 @@ app.post("/api/demo/reset", async (c) => {
   return c.json({ message: "Demo blockchain & voter states have been reset to genesis." });
 });
 
+// Serve frontend assets and SPA fallback
+app.get("/assets/*", (c) => {
+  const assetPath = c.req.path.replace(/^\/assets\//, "");
+  const filePath = resolve("./public/assets", assetPath);
+  if (existsSync(filePath)) {
+    const content = readFileSync(filePath);
+    const contentType = filePath.endsWith(".js")
+      ? "application/javascript"
+      : filePath.endsWith(".css")
+      ? "text/css"
+      : "application/octet-stream";
+    return c.body(content, 200, { "Content-Type": contentType });
+  }
+  return c.text("Asset not found", 404);
+});
+
+app.get("/*", (c) => {
+  const indexPath = resolve("./public/index.html");
+  if (existsSync(indexPath)) {
+    return c.html(readFileSync(indexPath, "utf-8"));
+  }
+  return c.text("Voting blockchain MVP ready. Run build to generate frontend assets.", 200);
+});
+
 export default app;
 
-const port = Number(process.env.PORT ?? 3000);
-serve({ fetch: app.fetch, port });
-console.log(`Voting blockchain MVP listening on http://localhost:${port}`);
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
+  const { serve } = await import("@hono/node-server");
+  const port = Number(process.env.PORT ?? 3000);
+  serve({ fetch: app.fetch, port });
+  console.log(`Voting blockchain MVP listening on http://localhost:${port}`);
+}
