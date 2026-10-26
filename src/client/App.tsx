@@ -13,7 +13,10 @@ import {
   Compass,
   Search,
   Layers,
-  ArrowRight
+  Zap,
+  ShieldAlert,
+  Sprout,
+  X
 } from "lucide-react";
 import { SystemCheckPage } from "./pages/SystemCheckPage";
 import { CandidatePage } from "./pages/CandidatePage";
@@ -408,7 +411,7 @@ export function App() {
               <span>{notification.message}</span>
             </div>
             <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-600">
-              ✕
+              <X className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -541,10 +544,18 @@ export function App() {
                       } ${!activeToken ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-xl">{c.symbol}</span>
+                        <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
+                          {c.id === "cand-1" ? (
+                            <Zap className="h-4 w-4 text-blue-600" />
+                          ) : c.id === "cand-2" ? (
+                            <Shield className="h-4 w-4 text-indigo-600" />
+                          ) : (
+                            <Sprout className="h-4 w-4 text-emerald-600" />
+                          )}
+                        </div>
                         <div>
                           <div className="text-slate-900 font-bold">{c.name}</div>
-                          <div className="text-slate-500 text-[11px] font-medium">{c.party}</div>
+                          <div className="text-slate-500 text-[11px] font-medium">{c.party} ({c.symbol})</div>
                         </div>
                       </div>
                       <input
@@ -584,8 +595,15 @@ export function App() {
                 {tally?.results?.map((res: any) => (
                   <div key={res.id} className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-bold text-slate-800">
-                        {res.symbol} {res.name}
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                        {res.id === "cand-1" ? (
+                          <Zap className="h-3.5 w-3.5 text-blue-600" />
+                        ) : res.id === "cand-2" ? (
+                          <Shield className="h-3.5 w-3.5 text-indigo-600" />
+                        ) : (
+                          <Sprout className="h-3.5 w-3.5 text-emerald-600" />
+                        )}
+                        {res.name}
                       </span>
                       <span className="font-mono text-slate-600">
                         {res.votes} votes ({res.percentage}%)

@@ -47,7 +47,7 @@ export const CandidatePage: React.FC = () => {
             </div>
             <div className="flex justify-between py-1 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">Party Affiliation:</span>
-              <span className="text-slate-800">Digital Democracy Party (⚡)</span>
+              <span className="text-slate-800">Digital Democracy Party (DDP)</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-200/60">
               <span className="text-slate-500 font-medium">Registration Serial:</span>

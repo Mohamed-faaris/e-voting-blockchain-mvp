@@ -10,9 +10,9 @@ const tursoUrl = process.env.TURSO_DATABASE_URL;
 const tursoAuthToken = process.env.TURSO_AUTH_TOKEN;
 
 export const CANDIDATES: Candidate[] = [
-  { id: "cand-1", name: "Alice Rivera", party: "Digital Democracy Party", symbol: "⚡" },
-  { id: "cand-2", name: "Benjamin Chen", party: "Civic Integrity Alliance", symbol: "🛡️" },
-  { id: "cand-3", name: "Elena Rostova", party: "Transparency & Progress", symbol: "🌱" }
+  { id: "cand-1", name: "Alice Rivera", party: "Digital Democracy Party", symbol: "DDP" },
+  { id: "cand-2", name: "Benjamin Chen", party: "Civic Integrity Alliance", symbol: "CIA" },
+  { id: "cand-3", name: "Elena Rostova", party: "Transparency & Progress", symbol: "TPP" }
 ];
 
 const INIT_SCHEMA_SQL = `
