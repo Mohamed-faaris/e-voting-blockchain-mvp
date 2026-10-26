@@ -13,15 +13,17 @@ import {
   Compass,
   Search,
   Layers,
+  GitFork,
+  Boxes,
   Zap,
-  ShieldAlert,
-  Sprout,
-  X
+  Sprout
 } from "lucide-react";
 import { SystemCheckPage } from "./pages/SystemCheckPage";
 import { CandidatePage } from "./pages/CandidatePage";
 import { AdminPage } from "./pages/AdminPage";
 import { ExplanationPage } from "./pages/ExplanationPage";
+import { MerkleTreePage } from "./pages/MerkleTreePage";
+import { BlockExplorerPage } from "./pages/BlockExplorerPage";
 import { ReceiptVerifier } from "./components/ReceiptVerifier";
 import { BoothHardwareSim } from "./components/BoothHardwareSim";
 
@@ -51,10 +53,20 @@ interface Block {
 }
 
 export function App() {
-  // Client URL Hash Router for discrete pages
+  const validRoutes = [
+    "booth",
+    "candidate",
+    "admin",
+    "system-check",
+    "explanation",
+    "merkle-tree",
+    "blocks",
+    "verifier"
+  ];
+
   const getRouteFromHash = () => {
     const hash = window.location.hash.replace(/^#\/?/, "");
-    if (["candidate", "admin", "system-check", "explanation", "verifier", "districts", "explorer"].includes(hash)) {
+    if (validRoutes.includes(hash)) {
       return hash;
     }
     return "booth";
@@ -80,7 +92,6 @@ export function App() {
   const [chainValid, setChainValid] = useState<boolean>(true);
   const [chainErrors, setChainErrors] = useState<string[]>([]);
   const [tally, setTally] = useState<any>(null);
-  const [districts, setDistricts] = useState<any[]>([]);
 
   // Booth State
   const [selectedVoterId, setSelectedVoterId] = useState("");
@@ -102,13 +113,12 @@ export function App() {
 
   const loadAll = async () => {
     try {
-      const [vRes, cRes, chRes, valRes, tRes, distRes] = await Promise.all([
+      const [vRes, cRes, chRes, valRes, tRes] = await Promise.all([
         fetch("/api/voters").then((r) => r.json()),
         fetch("/api/candidates").then((r) => r.json()),
         fetch("/chain").then((r) => r.json()),
         fetch("/chain/verify").then((r) => r.json()),
-        fetch("/api/tally").then((r) => r.json()),
-        fetch("/api/districts").then((r) => r.json())
+        fetch("/api/tally").then((r) => r.json())
       ]);
 
       if (vRes.voters) {
@@ -125,7 +135,6 @@ export function App() {
         setChainErrors(valRes.errors || []);
       }
       if (tRes) setTally(tRes);
-      if (distRes?.districts) setDistricts(distRes.districts);
     } catch (err) {
       console.error("Failed to load chain data", err);
     }
@@ -195,30 +204,9 @@ export function App() {
     }
   };
 
-  const handleTamper = async (index: number) => {
-    try {
-      const res = await fetch(`/demo/tamper/${index}`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      notify(`Block #${index} payload altered maliciously. Ledger integrity compromised!`, "err");
-      loadAll();
-    } catch (err: any) {
-      notify(err.message, "err");
-    }
-  };
-
-  const handleReset = async () => {
-    if (!confirm("Reset demo blockchain and all voter states back to Genesis?")) return;
-    await fetch("/api/demo/reset", { method: "POST" });
-    setActiveToken(null);
-    setSelectedCandidateId("");
-    notify("Chain and voter registry reset to clean genesis state.", "ok");
-    loadAll();
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
-      {/* Top Main Navigation Bar */}
+      {/* Top Header */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("booth")}>
@@ -231,16 +219,15 @@ export function App() {
                   Consensus Electronic Voting System
                 </h1>
                 <span className="text-[11px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-mono">
-                  v0.3
+                  v0.4
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                End-to-End Cryptographic Ledger & Face Bounding Box Protocol
+                End-to-End Cryptographic Ledger & Merkle Verification Protocol
               </p>
             </div>
           </div>
 
-          {/* Quick Header Navigation Links to Multiple Pages */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("candidate")}
@@ -302,7 +289,7 @@ export function App() {
           </div>
         </div>
 
-        {/* URL Router Navigation Bar */}
+        {/* Multi-Page Navigation Bar */}
         <div className="border-t border-slate-100 bg-white px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto flex gap-6 text-xs font-semibold overflow-x-auto">
             <button
@@ -315,6 +302,42 @@ export function App() {
             >
               <Vote className="h-4 w-4" />
               Voting Booth
+            </button>
+
+            <button
+              onClick={() => navigate("blocks")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "blocks"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Boxes className="h-4 w-4" />
+              Block Explorer
+            </button>
+
+            <button
+              onClick={() => navigate("merkle-tree")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "merkle-tree"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <GitFork className="h-4 w-4" />
+              Merkle Tree Explorer
+            </button>
+
+            <button
+              onClick={() => navigate("verifier")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "verifier"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Search className="h-4 w-4" />
+              Receipt Verifier
             </button>
 
             <button
@@ -364,35 +387,11 @@ export function App() {
               <Compass className="h-4 w-4" />
               10-Stage Explanation
             </button>
-
-            <button
-              onClick={() => navigate("verifier")}
-              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                currentRoute === "verifier"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Search className="h-4 w-4" />
-              Receipt Verifier
-            </button>
-
-            <button
-              onClick={() => navigate("explorer")}
-              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                currentRoute === "explorer"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Database className="h-4 w-4" />
-              Chain Explorer
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Main Page Body Container */}
+      {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {notification && (
           <div
@@ -411,30 +410,23 @@ export function App() {
               <span>{notification.message}</span>
             </div>
             <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-600">
-              <X className="h-4 w-4" />
+              ✕
             </button>
           </div>
         )}
 
-        {/* Page 1: Candidate Portal (/candidate) */}
+        {/* Routed Pages */}
         {currentRoute === "candidate" && <CandidatePage />}
-
-        {/* Page 2: Admin Portal (/admin) */}
         {currentRoute === "admin" && <AdminPage />}
-
-        {/* Page 3: System Check (/system-check) */}
         {currentRoute === "system-check" && <SystemCheckPage />}
-
-        {/* Page 4: Architectural Explanation (/explanation) */}
         {currentRoute === "explanation" && <ExplanationPage />}
-
-        {/* Page 5: Receipt Verifier (/verifier) */}
+        {currentRoute === "merkle-tree" && <MerkleTreePage />}
+        {currentRoute === "blocks" && <BlockExplorerPage />}
         {currentRoute === "verifier" && <ReceiptVerifier />}
 
-        {/* Page 6: Voting Booth (Default / /booth) */}
+        {/* Voting Booth Default Route */}
         {currentRoute === "booth" && (
           <div className="space-y-6">
-            {/* Embedded Live Hardware Peripheral with Face Bounding Box Tracker */}
             <BoothHardwareSim
               onCardTapped={(vId) => {
                 setSelectedVoterId(vId);
@@ -617,132 +609,6 @@ export function App() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Page 7: Blockchain Explorer (/explorer) */}
-        {currentRoute === "explorer" && (
-          <div className="space-y-6">
-            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">
-                    Consensus Blockchain Blocks
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Cryptographic audit of blocks, Merkle roots, and hash linkages
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                      chainValid
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                        : "bg-red-50 text-red-800 border-red-200"
-                    }`}
-                  >
-                    {chainValid ? (
-                      <>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                        <span>Chain Valid ({chain.length} blocks)</span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertOctagon className="h-3.5 w-3.5 text-red-600" />
-                        <span>Integrity Failed ({chainErrors.length} errors)</span>
-                      </>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={handleReset}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
-                  >
-                    Reset Demo Ledger
-                  </button>
-                </div>
-              </div>
-
-              {chainErrors.length > 0 && (
-                <div className="mb-4 rounded-lg bg-red-50 p-3 text-xs text-red-800 border border-red-200 space-y-1">
-                  <div className="font-bold">Verification Errors Detected:</div>
-                  {chainErrors.map((e, idx) => (
-                    <div key={idx} className="font-mono">
-                      • {e}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex gap-4 overflow-x-auto pb-4 pt-1">
-                {chain.map((b) => {
-                  const isTampered = b.districtId.includes("TAMPERED");
-                  return (
-                    <div
-                      key={b.index}
-                      className={`min-w-[280px] max-w-[280px] rounded-xl border p-4 text-xs space-y-2.5 transition shrink-0 ${
-                        isTampered
-                          ? "border-red-400 bg-red-50/50 shadow-xs"
-                          : "border-slate-200 bg-white shadow-2xs hover:border-slate-300"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900">
-                          {b.index === 0 ? "Genesis Block #0" : `Block #${b.index}`}
-                        </span>
-                        <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {b.districtId}
-                        </span>
-                      </div>
-
-                      <div className="text-[11px] text-slate-400">
-                        {new Date(b.timestamp).toLocaleString()}
-                      </div>
-
-                      <div className="space-y-1 font-mono text-[10px]">
-                        <div>
-                          <span className="text-slate-400 block font-sans">Hash:</span>
-                          <span className="text-blue-700 truncate block" title={b.hash}>
-                            {b.hash.slice(0, 22)}...
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block font-sans">Previous Hash:</span>
-                          <span className="text-slate-600 truncate block" title={b.previousHash}>
-                            {b.previousHash.slice(0, 22)}...
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block font-sans">Merkle Root:</span>
-                          <span className="text-emerald-700 truncate block" title={b.merkleRoot}>
-                            {b.merkleRoot.slice(0, 22)}...
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-slate-100 pt-2 flex items-center justify-between">
-                        <span className="text-slate-500 text-[11px]">
-                          Transactions: <strong>{b.transactions.length}</strong>
-                        </span>
-                        {b.index > 0 && !isTampered && (
-                          <button
-                            onClick={() => handleTamper(b.index)}
-                            className="text-[10px] text-red-600 hover:text-red-700 font-medium"
-                          >
-                            Tamper Block
-                          </button>
-                        )}
-                        {isTampered && (
-                          <span className="text-[10px] text-red-600 font-bold uppercase">
-                            Tampered
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
           </div>
