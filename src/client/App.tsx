@@ -206,7 +206,7 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
-      {/* Top Header */}
+      {/* Top Header - Pure clean navigation */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("booth")}>
@@ -230,66 +230,17 @@ export function App() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => navigate("candidate")}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                currentRoute === "candidate"
-                  ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <Users className="h-4 w-4 text-indigo-600" />
-              <span>Candidate</span>
-            </button>
-
-            <button
-              onClick={() => navigate("admin")}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                currentRoute === "admin"
-                  ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <Lock className="h-4 w-4" />
-              <span>Admin</span>
-            </button>
-
-            <button
-              onClick={() => navigate("system-check")}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                currentRoute === "system-check"
-                  ? "bg-emerald-50 border-emerald-300 text-emerald-800 shadow-2xs"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <Activity className="h-4 w-4 text-emerald-600" />
-              <span>System Check</span>
-            </button>
-
-            <button
-              onClick={() => navigate("explanation")}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                currentRoute === "explanation"
-                  ? "bg-blue-50 border-blue-300 text-blue-700 shadow-2xs"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <Compass className="h-4 w-4 text-blue-600" />
-              <span>Explanation</span>
-            </button>
-
-            <div className="h-5 w-px bg-slate-200 mx-1" />
-
-            <button
               onClick={loadAll}
               title="Refresh ledger state"
-              className="p-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Sync Chain</span>
             </button>
           </div>
         </div>
 
-        {/* Multi-Page Navigation Bar */}
+        {/* Primary Multi-Page Navigation Bar */}
         <div className="border-t border-slate-100 bg-white px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto flex gap-6 text-xs font-semibold overflow-x-auto">
             <button
@@ -305,42 +256,6 @@ export function App() {
             </button>
 
             <button
-              onClick={() => navigate("blocks")}
-              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                currentRoute === "blocks"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Boxes className="h-4 w-4" />
-              Block Explorer
-            </button>
-
-            <button
-              onClick={() => navigate("merkle-tree")}
-              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                currentRoute === "merkle-tree"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <GitFork className="h-4 w-4" />
-              Merkle Tree Explorer
-            </button>
-
-            <button
-              onClick={() => navigate("verifier")}
-              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                currentRoute === "verifier"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Search className="h-4 w-4" />
-              Receipt Verifier
-            </button>
-
-            <button
               onClick={() => navigate("candidate")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                 currentRoute === "candidate"
@@ -349,7 +264,7 @@ export function App() {
               }`}
             >
               <Users className="h-4 w-4" />
-              Candidate Portal
+              Candidate Scrutineer Portal
             </button>
 
             <button
@@ -374,6 +289,42 @@ export function App() {
             >
               <Activity className="h-4 w-4" />
               System Check
+            </button>
+
+            <button
+              onClick={() => navigate("merkle-tree")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "merkle-tree"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <GitFork className="h-4 w-4" />
+              Merkle Tree Explorer
+            </button>
+
+            <button
+              onClick={() => navigate("blocks")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "blocks"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Boxes className="h-4 w-4" />
+              Block Inspector
+            </button>
+
+            <button
+              onClick={() => navigate("verifier")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "verifier"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Search className="h-4 w-4" />
+              Receipt Verifier
             </button>
 
             <button
