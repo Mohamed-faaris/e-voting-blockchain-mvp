@@ -10,7 +10,8 @@ import {
   getAllVoters,
   authenticateVoter,
   CANDIDATES,
-  resetDemoData
+  resetDemoData,
+  storage
 } from "./storage/sqlite.js";
 import { demoEncryptBallot, demoDecryptBallot, validatorKeys } from "./blockchain/crypto.js";
 import {
@@ -23,8 +24,62 @@ import {
 
 const app = new Hono();
 
+// Track boot time
+const serverStartTime = Date.now();
+
 // Initialize Database (Turso or local)
 await initStorage();
+
+// Detailed Real Telemetry & Stats Endpoint
+app.get("/api/system/stats", async (c) => {
+  const t0 = performance.now();
+  let dbStatus = "healthy";
+  let dbError: string | null = null;
+  let chainLength = 0;
+  let voterCount = 0;
+
+  try {
+    const blocks = await storage.getBlocks();
+    const voters = await storage.getVoters();
+    chainLength = blocks.length;
+    voterCount = voters.length;
+  } catch (err: any) {
+    dbStatus = "error";
+    dbError = err.message;
+  }
+  const dbLatencyMs = Math.round((performance.now() - t0) * 100) / 100;
+
+  const mem = process.memoryUsage();
+  const uptimeSeconds = Math.round((Date.now() - serverStartTime) / 1000);
+
+  return c.json({
+    timestamp: new Date().toISOString(),
+    uptimeSeconds,
+    database: {
+      provider: process.env.TURSO_DATABASE_URL ? "Turso Cloud (libSQL)" : "Local SQLite (node:sqlite)",
+      status: dbStatus,
+      latencyMs: dbLatencyMs,
+      error: dbError,
+      records: {
+        blocks: chainLength,
+        voters: voterCount
+      }
+    },
+    runtime: {
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      heapUsedMB: Math.round((mem.heapUsed / 1024 / 1024) * 100) / 100,
+      heapTotalMB: Math.round((mem.heapTotal / 1024 / 1024) * 100) / 100,
+      rssMB: Math.round((mem.rss / 1024 / 1024) * 100) / 100
+    },
+    consensus: {
+      validatorAlgorithm: "Ed25519",
+      hashAlgorithm: "SHA-256",
+      districtsOnline: (await getDistrictsStatus()).filter((d) => d.status === "ONLINE").length
+    }
+  });
+});
 
 // System info
 app.get("/api/info", (c) => c.json({
@@ -35,7 +90,22 @@ app.get("/api/info", (c) => c.json({
   validatorPublicKey: validatorKeys.publicKey
 }));
 
-app.get("/api/health", (c) => c.json({ ok: true, database: process.env.TURSO_DATABASE_URL ? "turso" : "sqlite" }));
+app.get("/api/health", async (c) => {
+  const t0 = performance.now();
+  let dbOk = true;
+  try {
+    await storage.getBlocks();
+  } catch {
+    dbOk = false;
+  }
+  const latency = Math.round((performance.now() - t0) * 100) / 100;
+
+  return c.json({
+    ok: dbOk,
+    database: process.env.TURSO_DATABASE_URL ? "turso" : "sqlite",
+    latencyMs: latency
+  });
+});
 
 // Chain endpoints
 app.get("/chain", async (c) => c.json({ blocks: await getChain() }));
