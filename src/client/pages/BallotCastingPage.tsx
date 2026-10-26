@@ -29,6 +29,7 @@ export const BallotCastingPage: React.FC<BallotCastingPageProps> = ({
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [castSuccessReceipt, setCastSuccessReceipt] = useState<any | null>(null);
 
   useEffect(() => {
     fetch("/api/candidates")
@@ -58,12 +59,13 @@ export const BallotCastingPage: React.FC<BallotCastingPageProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to commit ballot to blockchain.");
 
-      onVoteCast({
+      const receiptPayload = {
         ...data.receipt,
         candidate: data.candidate,
         tokenId: tokenData.tokenId
-      });
-      onNavigate("booth-receipt");
+      };
+      setCastSuccessReceipt(receiptPayload);
+      onVoteCast(receiptPayload);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -179,6 +181,39 @@ export const BallotCastingPage: React.FC<BallotCastingPageProps> = ({
           );
         })}
       </div>
+
+      {/* Success Notification if ballot was committed */}
+      {castSuccessReceipt && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-5 space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold text-emerald-900 border-b border-emerald-200 pb-2">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              Ballot Successfully Encrypted & Committed to Blockchain!
+            </span>
+            <span className="font-mono text-xs bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
+              Block #{castSuccessReceipt.blockIndex}
+            </span>
+          </div>
+          <div className="text-xs text-emerald-800">
+            Transaction ID: <span className="font-mono font-bold">{castSuccessReceipt.txId}</span>
+          </div>
+          <div className="flex items-center justify-between pt-2">
+            <button
+              onClick={() => setCastSuccessReceipt(null)}
+              className="text-xs text-emerald-700 hover:text-emerald-900 font-medium"
+            >
+              Dismiss
+            </button>
+            <button
+              onClick={() => onNavigate("booth-receipt")}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 transition shadow-xs"
+            >
+              View Official Receipt & Certificate
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex items-center justify-between pt-4 border-t border-slate-100">

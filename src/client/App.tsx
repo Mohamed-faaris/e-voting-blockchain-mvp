@@ -15,8 +15,11 @@ import {
   GitFork,
   Boxes,
   Radio,
-  FileCheck
+  FileCheck,
+  Home,
+  X
 } from "lucide-react";
+import { HomePage } from "./pages/HomePage";
 import { SystemCheckPage } from "./pages/SystemCheckPage";
 import { CandidatePage } from "./pages/CandidatePage";
 import { AdminPage } from "./pages/AdminPage";
@@ -30,6 +33,7 @@ import { ReceiptVerifier } from "./components/ReceiptVerifier";
 
 export function App() {
   const validRoutes = [
+    "home",
     "booth",
     "booth-checkin",
     "booth-ballot",
@@ -48,7 +52,7 @@ export function App() {
     if (validRoutes.includes(hash)) {
       return hash;
     }
-    return "booth-checkin";
+    return "home";
   };
 
   const [currentRoute, setCurrentRoute] = useState<string>(getRouteFromHash());
@@ -86,7 +90,7 @@ export function App() {
       {/* Top Header */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("booth-checkin")}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("home")}>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white shadow-xs">
               <Shield className="h-5 w-5" />
             </div>
@@ -100,12 +104,23 @@ export function App() {
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                Discrete Multi-Page Voting Booth & Cryptographic Consensus Ledger
+                Operations Portal & Cryptographic Consensus Ledger
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("home")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                currentRoute === "home"
+                  ? "bg-blue-50 border-blue-300 text-blue-700 shadow-2xs"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <Home className="h-4 w-4 text-blue-600" />
+              <span>Portal Home</span>
+            </button>
             <button
               onClick={() => navigate("system-check")}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
@@ -123,6 +138,18 @@ export function App() {
         {/* Global Multi-Page Navigation Bar */}
         <div className="border-t border-slate-100 bg-white px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto flex gap-6 text-xs font-semibold overflow-x-auto">
+            <button
+              onClick={() => navigate("home")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "home"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Home className="h-4 w-4" />
+              Operations Home
+            </button>
+
             <button
               onClick={() => navigate("booth-checkin")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
@@ -255,10 +282,13 @@ export function App() {
               <span>{notification.message}</span>
             </div>
             <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-600">
-              ✕
+              <X className="h-4 w-4" />
             </button>
           </div>
         )}
+
+        {/* Home Overview & Role Selection */}
+        {currentRoute === "home" && <HomePage onNavigate={navigate} />}
 
         {/* Voting Booth Flow Stage 1: Checkin & Token Dispenser */}
         {(currentRoute === "booth-checkin" || currentRoute === "booth") && (
