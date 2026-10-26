@@ -9,15 +9,19 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertOctagon,
-  FileText,
   Key,
   Compass,
-  ArrowRight
+  Scan,
+  Search,
+  Layers,
+  Server
 } from "lucide-react";
 import { SystemCheckModal } from "./components/SystemCheckModal";
 import { CandidateLoginModal } from "./components/CandidateLoginModal";
 import { AdminLoginModal } from "./components/AdminLoginModal";
 import { ExaminerFlow } from "./components/ExaminerFlow";
+import { ReceiptVerifier } from "./components/ReceiptVerifier";
+import { BoothHardwareSim } from "./components/BoothHardwareSim";
 
 interface Voter {
   voterId: string;
@@ -44,8 +48,18 @@ interface Block {
   hash: string;
 }
 
+interface DistrictNode {
+  id: string;
+  name: string;
+  status: "ONLINE" | "PARTITIONED" | "SYNCING";
+  blockHeight: number;
+  lastCheckpointHash: string;
+  lastHeartbeat: string;
+  pendingTransactions: number;
+}
+
 export function App() {
-  const [activeTab, setActiveTab] = useState<"booth" | "examiner" | "explorer">("booth");
+  const [activeTab, setActiveTab] = useState<"booth" | "examiner" | "verifier" | "districts" | "explorer">("booth");
   const [showSystemCheck, setShowSystemCheck] = useState(false);
   const [showCandidateLogin, setShowCandidateLogin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -57,6 +71,8 @@ export function App() {
   const [chainValid, setChainValid] = useState<boolean>(true);
   const [chainErrors, setChainErrors] = useState<string[]>([]);
   const [tally, setTally] = useState<any>(null);
+  const [districts, setDistricts] = useState<DistrictNode[]>([]);
+  const [checkpoints, setCheckpoints] = useState<any[]>([]);
 
   // Booth State
   const [selectedVoterId, setSelectedVoterId] = useState("");
@@ -78,12 +94,14 @@ export function App() {
 
   const loadAll = async () => {
     try {
-      const [vRes, cRes, chRes, valRes, tRes] = await Promise.all([
+      const [vRes, cRes, chRes, valRes, tRes, distRes, cpRes] = await Promise.all([
         fetch("/api/voters").then((r) => r.json()),
         fetch("/api/candidates").then((r) => r.json()),
         fetch("/chain").then((r) => r.json()),
         fetch("/chain/verify").then((r) => r.json()),
-        fetch("/api/tally").then((r) => r.json())
+        fetch("/api/tally").then((r) => r.json()),
+        fetch("/api/districts").then((r) => r.json()),
+        fetch("/api/sync/checkpoints").then((r) => r.json())
       ]);
 
       if (vRes.voters) {
@@ -100,6 +118,8 @@ export function App() {
         setChainErrors(valRes.errors || []);
       }
       if (tRes) setTally(tRes);
+      if (distRes.districts) setDistricts(distRes.districts);
+      if (cpRes.checkpoints) setCheckpoints(cpRes.checkpoints);
     } catch (err) {
       console.error("Failed to load chain data", err);
     }
@@ -111,14 +131,15 @@ export function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleAuthenticateVoter = async () => {
-    if (!selectedVoterId) return;
+  const handleAuthenticateVoter = async (voterIdToAuth?: string) => {
+    const id = voterIdToAuth || selectedVoterId;
+    if (!id) return;
     setLoading(true);
     try {
       const res = await fetch("/api/voter/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voterId: selectedVoterId })
+        body: JSON.stringify({ voterId: id })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Authentication failed");
@@ -166,6 +187,25 @@ export function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePartitionDistrict = async (districtId: string) => {
+    await fetch(`/api/districts/${districtId}/fail`, { method: "POST" });
+    notify(`District ${districtId} network partitioned. Switched to isolated buffering.`, "err");
+    loadAll();
+  };
+
+  const handleRecoverDistrict = async (districtId: string) => {
+    await fetch(`/api/districts/${districtId}/recover`, { method: "POST" });
+    notify(`District ${districtId} recovered and synchronized with state checkpoint.`, "ok");
+    loadAll();
+  };
+
+  const handleProduceCheckpoint = async () => {
+    const res = await fetch("/api/sync/checkpoint", { method: "POST" });
+    const data = await res.json();
+    notify(`New State Checkpoint sealed: ${data.checkpoint.stateRootHash.slice(0, 18)}...`, "ok");
+    loadAll();
   };
 
   const handleTamper = async (index: number) => {
@@ -255,10 +295,10 @@ export function App() {
 
         {/* Sub Navigation Tabs */}
         <div className="border-t border-slate-100 bg-white px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto flex gap-6 text-xs font-semibold">
+          <div className="max-w-7xl mx-auto flex gap-6 text-xs font-semibold overflow-x-auto">
             <button
               onClick={() => setActiveTab("booth")}
-              className={`py-3 border-b-2 flex items-center gap-2 transition ${
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                 activeTab === "booth"
                   ? "border-blue-600 text-blue-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
@@ -269,7 +309,7 @@ export function App() {
             </button>
             <button
               onClick={() => setActiveTab("examiner")}
-              className={`py-3 border-b-2 flex items-center gap-2 transition ${
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                 activeTab === "examiner"
                   ? "border-blue-600 text-blue-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
@@ -279,8 +319,30 @@ export function App() {
               10-Stage Protocol Examiner
             </button>
             <button
+              onClick={() => setActiveTab("verifier")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                activeTab === "verifier"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Search className="h-4 w-4" />
+              Ballot Receipt Verifier
+            </button>
+            <button
+              onClick={() => setActiveTab("districts")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                activeTab === "districts"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Layers className="h-4 w-4" />
+              Multi-District Nodes & Sync
+            </button>
+            <button
               onClick={() => setActiveTab("explorer")}
-              className={`py-3 border-b-2 flex items-center gap-2 transition ${
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                 activeTab === "explorer"
                   ? "border-blue-600 text-blue-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
@@ -295,7 +357,6 @@ export function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* Banner Alert for Notifications */}
         {notification && (
           <div
             className={`p-4 rounded-xl border flex items-center justify-between text-xs font-medium animate-in fade-in duration-200 ${
@@ -324,6 +385,17 @@ export function App() {
         {/* Tab 1: Live Voting Booth */}
         {activeTab === "booth" && (
           <div className="space-y-6">
+            {/* Embedded Interactive Hardware Peripheral */}
+            <BoothHardwareSim
+              onCardTapped={(vId) => {
+                setSelectedVoterId(vId);
+                handleAuthenticateVoter(vId);
+              }}
+              onLivenessVerified={() => {
+                notify("Biometric liveness gate passed. Voter eligibility unlocked.", "ok");
+              }}
+            />
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Step 1: Voter Authentication */}
               <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
@@ -362,7 +434,7 @@ export function App() {
                   </select>
 
                   <button
-                    onClick={handleAuthenticateVoter}
+                    onClick={() => handleAuthenticateVoter()}
                     disabled={loading || !selectedVoterId}
                     className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-xs disabled:opacity-50"
                   >
@@ -489,7 +561,117 @@ export function App() {
         {/* Tab 2: 10-Stage Protocol Examiner */}
         {activeTab === "examiner" && <ExaminerFlow />}
 
-        {/* Tab 3: Blockchain Explorer */}
+        {/* Tab 3: Ballot Receipt Verifier */}
+        {activeTab === "verifier" && <ReceiptVerifier />}
+
+        {/* Tab 4: Multi-District Nodes & Checkpoint Sync */}
+        {activeTab === "districts" && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Multi-District Consensus Nodes & Checkpoint Registry
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Simulate autonomous district nodes, network partitions, and upward state checkpoint aggregation.
+                  </p>
+                </div>
+                <button
+                  onClick={handleProduceCheckpoint}
+                  className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition"
+                >
+                  Seal State Checkpoint Root
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {districts.map((d) => (
+                  <div
+                    key={d.id}
+                    className={`rounded-xl border p-4 text-xs space-y-3 transition ${
+                      d.status === "ONLINE"
+                        ? "border-slate-200 bg-white"
+                        : "border-red-300 bg-red-50/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900">{d.name}</span>
+                      <span
+                        className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${
+                          d.status === "ONLINE"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {d.status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 font-mono text-[11px] text-slate-600">
+                      <div>Block Height: <strong className="text-slate-900">{d.blockHeight}</strong></div>
+                      <div className="truncate text-slate-500" title={d.lastCheckpointHash}>
+                        Last Root: {d.lastCheckpointHash.slice(0, 16)}...
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex gap-2">
+                      {d.status === "ONLINE" ? (
+                        <button
+                          onClick={() => handlePartitionDistrict(d.id)}
+                          className="flex-1 rounded-lg border border-red-200 bg-white py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50 transition"
+                        >
+                          Partition Node
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleRecoverDistrict(d.id)}
+                          className="flex-1 rounded-lg bg-emerald-600 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 transition"
+                        >
+                          Reconnect & Sync
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Checkpoints table */}
+              <div className="border border-slate-200 rounded-lg overflow-hidden text-xs mt-4">
+                <div className="bg-slate-50 p-2.5 font-bold text-slate-700 border-b border-slate-200 flex justify-between">
+                  <span>State / National Checkpoint Archive</span>
+                  <span className="text-slate-400 font-normal">Indexed roots for disaster recovery</span>
+                </div>
+                {checkpoints.length === 0 ? (
+                  <div className="p-4 text-center text-slate-400 italic">
+                    No state checkpoints sealed yet. Click "Seal State Checkpoint Root" above to generate.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {checkpoints.map((cp) => (
+                      <div key={cp.checkpointIndex} className="p-3 bg-white flex items-center justify-between">
+                        <div>
+                          <div className="font-bold text-slate-900">
+                            Checkpoint #{cp.checkpointIndex}
+                          </div>
+                          <div className="font-mono text-[11px] text-blue-700">
+                            State Root: {cp.stateRootHash}
+                          </div>
+                        </div>
+                        <div className="text-right text-[11px] text-slate-500">
+                          <div>{new Date(cp.timestamp).toLocaleTimeString()}</div>
+                          <div>{cp.totalBlocksSummarized} blocks summarized</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 5: Blockchain Explorer */}
         {activeTab === "explorer" && (
           <div className="space-y-6">
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
@@ -545,7 +727,7 @@ export function App() {
 
               {/* Blocks Visualizer */}
               <div className="flex gap-4 overflow-x-auto pb-4 pt-1">
-                {chain.map((b, i) => {
+                {chain.map((b) => {
                   const isTampered = b.districtId.includes("TAMPERED");
                   return (
                     <div

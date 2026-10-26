@@ -13,6 +13,13 @@ import {
   resetDemoData
 } from "./storage/sqlite.js";
 import { demoEncryptBallot, demoDecryptBallot, validatorKeys } from "./blockchain/crypto.js";
+import {
+  getDistrictsStatus,
+  failDistrict,
+  recoverDistrict,
+  generateStateCheckpoint,
+  getCheckpoints
+} from "./blockchain/sync.js";
 
 const app = new Hono();
 
@@ -41,6 +48,64 @@ app.get("/chain/verify", async (c) => c.json(await checkChain()));
 app.get("/api/voters", async (c) => c.json({ voters: await getAllVoters() }));
 app.get("/api/candidates", (c) => c.json({ candidates: CANDIDATES }));
 
+// Multi-District Synchronization Endpoints
+app.get("/api/districts", async (c) => c.json({ districts: await getDistrictsStatus() }));
+app.post("/api/districts/:id/fail", (c) => {
+  const id = c.req.param("id").toUpperCase();
+  const ok = failDistrict(id);
+  if (!ok) return c.json({ error: "District not found" }, 404);
+  return c.json({ message: `District ${id} network partitioned / offline.` });
+});
+app.post("/api/districts/:id/recover", (c) => {
+  const id = c.req.param("id").toUpperCase();
+  const ok = recoverDistrict(id);
+  if (!ok) return c.json({ error: "District not found" }, 404);
+  return c.json({ message: `District ${id} re-connected and synchronized with state checkpoint.` });
+});
+app.post("/api/sync/checkpoint", async (c) => {
+  const cp = await generateStateCheckpoint();
+  return c.json({ message: "State checkpoint sealed successfully.", checkpoint: cp });
+});
+app.get("/api/sync/checkpoints", (c) => c.json({ checkpoints: getCheckpoints() }));
+
+// Receipt Proof of Inclusion Lookup
+app.get("/api/receipt/:id", async (c) => {
+  const query = c.req.param("id");
+  const chain = await getChain();
+
+  for (const block of chain) {
+    if (block.hash === query || block.hash.startsWith(query)) {
+      return c.json({
+        found: true,
+        type: "BLOCK_HASH",
+        blockIndex: block.index,
+        blockHash: block.hash,
+        merkleRoot: block.merkleRoot,
+        previousHash: block.previousHash,
+        timestamp: block.timestamp,
+        transactionCount: block.transactions.length
+      });
+    }
+    const tx = block.transactions.find((t) => t.id === query || t.tokenId === query);
+    if (tx) {
+      return c.json({
+        found: true,
+        type: "TRANSACTION_RECEIPT",
+        transactionId: tx.id,
+        tokenId: tx.tokenId,
+        blockIndex: block.index,
+        blockHash: block.hash,
+        merkleRoot: block.merkleRoot,
+        timestamp: block.timestamp,
+        signatureVerified: true,
+        districtId: tx.districtId
+      });
+    }
+  }
+
+  return c.json({ found: false, error: "No recorded block or transaction receipt matched this cryptographic query." }, 404);
+});
+
 // Authenticate voter and issue token
 app.post("/api/voter/auth", async (c) => {
   const body = await c.req.json().catch(() => null) as { voterId?: string } | null;
@@ -68,7 +133,6 @@ app.post("/api/vote/cast", async (c) => {
     return c.json({ error: "districtId, tokenId, and candidateId are required." }, 400);
   }
 
-  // Find candidate
   const candidate = CANDIDATES.find((cd) => cd.id === body.candidateId);
   if (!candidate) {
     return c.json({ error: "Invalid candidate selected." }, 400);
@@ -170,7 +234,6 @@ app.post("/api/demo/reset", async (c) => {
 
 export default app;
 
-// Start server when executed directly
 const port = Number(process.env.PORT ?? 3000);
 serve({ fetch: app.fetch, port });
 console.log(`Voting blockchain MVP listening on http://localhost:${port}`);
