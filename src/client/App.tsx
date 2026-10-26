@@ -11,15 +11,14 @@ import {
   AlertOctagon,
   Key,
   Compass,
-  Scan,
   Search,
   Layers,
-  Server
+  ArrowRight
 } from "lucide-react";
-import { SystemCheckModal } from "./components/SystemCheckModal";
-import { CandidateLoginModal } from "./components/CandidateLoginModal";
-import { AdminLoginModal } from "./components/AdminLoginModal";
-import { ExaminerFlow } from "./components/ExaminerFlow";
+import { SystemCheckPage } from "./pages/SystemCheckPage";
+import { CandidatePage } from "./pages/CandidatePage";
+import { AdminPage } from "./pages/AdminPage";
+import { ExplanationPage } from "./pages/ExplanationPage";
 import { ReceiptVerifier } from "./components/ReceiptVerifier";
 import { BoothHardwareSim } from "./components/BoothHardwareSim";
 
@@ -48,21 +47,28 @@ interface Block {
   hash: string;
 }
 
-interface DistrictNode {
-  id: string;
-  name: string;
-  status: "ONLINE" | "PARTITIONED" | "SYNCING";
-  blockHeight: number;
-  lastCheckpointHash: string;
-  lastHeartbeat: string;
-  pendingTransactions: number;
-}
-
 export function App() {
-  const [activeTab, setActiveTab] = useState<"booth" | "examiner" | "verifier" | "districts" | "explorer">("booth");
-  const [showSystemCheck, setShowSystemCheck] = useState(false);
-  const [showCandidateLogin, setShowCandidateLogin] = useState(false);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  // Client URL Hash Router for discrete pages
+  const getRouteFromHash = () => {
+    const hash = window.location.hash.replace(/^#\/?/, "");
+    if (["candidate", "admin", "system-check", "explanation", "verifier", "districts", "explorer"].includes(hash)) {
+      return hash;
+    }
+    return "booth";
+  };
+
+  const [currentRoute, setCurrentRoute] = useState<string>(getRouteFromHash());
+
+  useEffect(() => {
+    const onHashChange = () => setCurrentRoute(getRouteFromHash());
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  const navigate = (route: string) => {
+    window.location.hash = `#/${route}`;
+    setCurrentRoute(route);
+  };
 
   // Core Data
   const [voters, setVoters] = useState<Voter[]>([]);
@@ -71,8 +77,7 @@ export function App() {
   const [chainValid, setChainValid] = useState<boolean>(true);
   const [chainErrors, setChainErrors] = useState<string[]>([]);
   const [tally, setTally] = useState<any>(null);
-  const [districts, setDistricts] = useState<DistrictNode[]>([]);
-  const [checkpoints, setCheckpoints] = useState<any[]>([]);
+  const [districts, setDistricts] = useState<any[]>([]);
 
   // Booth State
   const [selectedVoterId, setSelectedVoterId] = useState("");
@@ -94,14 +99,13 @@ export function App() {
 
   const loadAll = async () => {
     try {
-      const [vRes, cRes, chRes, valRes, tRes, distRes, cpRes] = await Promise.all([
+      const [vRes, cRes, chRes, valRes, tRes, distRes] = await Promise.all([
         fetch("/api/voters").then((r) => r.json()),
         fetch("/api/candidates").then((r) => r.json()),
         fetch("/chain").then((r) => r.json()),
         fetch("/chain/verify").then((r) => r.json()),
         fetch("/api/tally").then((r) => r.json()),
-        fetch("/api/districts").then((r) => r.json()),
-        fetch("/api/sync/checkpoints").then((r) => r.json())
+        fetch("/api/districts").then((r) => r.json())
       ]);
 
       if (vRes.voters) {
@@ -118,8 +122,7 @@ export function App() {
         setChainErrors(valRes.errors || []);
       }
       if (tRes) setTally(tRes);
-      if (distRes.districts) setDistricts(distRes.districts);
-      if (cpRes.checkpoints) setCheckpoints(cpRes.checkpoints);
+      if (distRes?.districts) setDistricts(distRes.districts);
     } catch (err) {
       console.error("Failed to load chain data", err);
     }
@@ -178,7 +181,7 @@ export function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to submit ballot");
 
-      notify(`Vote sealed in Block #${data.receipt.blockIndex}. Block hash: ${data.receipt.blockHash.slice(0, 16)}...`, "ok");
+      notify(`Vote sealed in Block #${data.receipt.blockIndex}. Hash: ${data.receipt.blockHash.slice(0, 16)}...`, "ok");
       setActiveToken(null);
       setSelectedCandidateId("");
       loadAll();
@@ -187,25 +190,6 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handlePartitionDistrict = async (districtId: string) => {
-    await fetch(`/api/districts/${districtId}/fail`, { method: "POST" });
-    notify(`District ${districtId} network partitioned. Switched to isolated buffering.`, "err");
-    loadAll();
-  };
-
-  const handleRecoverDistrict = async (districtId: string) => {
-    await fetch(`/api/districts/${districtId}/recover`, { method: "POST" });
-    notify(`District ${districtId} recovered and synchronized with state checkpoint.`, "ok");
-    loadAll();
-  };
-
-  const handleProduceCheckpoint = async () => {
-    const res = await fetch("/api/sync/checkpoint", { method: "POST" });
-    const data = await res.json();
-    notify(`New State Checkpoint sealed: ${data.checkpoint.stateRootHash.slice(0, 18)}...`, "ok");
-    loadAll();
   };
 
   const handleTamper = async (index: number) => {
@@ -231,10 +215,10 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
-      {/* Top Navigation Bar */}
+      {/* Top Main Navigation Bar */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("booth")}>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white shadow-xs">
               <Shield className="h-5 w-5" />
             </div>
@@ -243,42 +227,64 @@ export function App() {
                 <h1 className="font-bold text-slate-900 text-base sm:text-lg">
                   Consensus Electronic Voting System
                 </h1>
-                <span className="hidden sm:inline-block text-[11px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-mono">
-                  v0.2-prod
+                <span className="text-[11px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-mono">
+                  v0.3
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                Cryptographic Ballot Authentication & Distributed Ledger Proof
+                End-to-End Cryptographic Ledger & Face Bounding Box Protocol
               </p>
             </div>
           </div>
 
-          {/* Action Header Buttons */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Header Navigation Links to Multiple Pages */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowSystemCheck(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs"
+              onClick={() => navigate("candidate")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                currentRoute === "candidate"
+                  ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <Users className="h-4 w-4 text-indigo-600" />
+              <span>Candidate</span>
+            </button>
+
+            <button
+              onClick={() => navigate("admin")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                currentRoute === "admin"
+                  ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <Lock className="h-4 w-4" />
+              <span>Admin</span>
+            </button>
+
+            <button
+              onClick={() => navigate("system-check")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                currentRoute === "system-check"
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-800 shadow-2xs"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
             >
               <Activity className="h-4 w-4 text-emerald-600" />
               <span>System Check</span>
             </button>
 
             <button
-              onClick={() => setShowCandidateLogin(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs"
+              onClick={() => navigate("explanation")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                currentRoute === "explanation"
+                  ? "bg-blue-50 border-blue-300 text-blue-700 shadow-2xs"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
             >
-              <Users className="h-4 w-4 text-indigo-600" />
-              <span className="hidden sm:inline">Candidate Login</span>
-              <span className="sm:hidden">Candidate</span>
-            </button>
-
-            <button
-              onClick={() => setShowAdminLogin(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs"
-            >
-              <Lock className="h-4 w-4 text-slate-700" />
-              <span className="hidden sm:inline">Admin Login</span>
-              <span className="sm:hidden">Admin</span>
+              <Compass className="h-4 w-4 text-blue-600" />
+              <span>Explanation</span>
             </button>
 
             <div className="h-5 w-px bg-slate-200 mx-1" />
@@ -293,73 +299,101 @@ export function App() {
           </div>
         </div>
 
-        {/* Sub Navigation Tabs */}
+        {/* URL Router Navigation Bar */}
         <div className="border-t border-slate-100 bg-white px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto flex gap-6 text-xs font-semibold overflow-x-auto">
             <button
-              onClick={() => setActiveTab("booth")}
+              onClick={() => navigate("booth")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                activeTab === "booth"
+                currentRoute === "booth"
                   ? "border-blue-600 text-blue-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <Vote className="h-4 w-4" />
-              Live Voting Booth
+              Voting Booth
             </button>
+
             <button
-              onClick={() => setActiveTab("examiner")}
+              onClick={() => navigate("candidate")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                activeTab === "examiner"
+                currentRoute === "candidate"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              Candidate Portal
+            </button>
+
+            <button
+              onClick={() => navigate("admin")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "admin"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Lock className="h-4 w-4" />
+              Admin Portal
+            </button>
+
+            <button
+              onClick={() => navigate("system-check")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "system-check"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Activity className="h-4 w-4" />
+              System Check
+            </button>
+
+            <button
+              onClick={() => navigate("explanation")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "explanation"
                   ? "border-blue-600 text-blue-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <Compass className="h-4 w-4" />
-              10-Stage Protocol Examiner
+              10-Stage Explanation
             </button>
+
             <button
-              onClick={() => setActiveTab("verifier")}
+              onClick={() => navigate("verifier")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                activeTab === "verifier"
+                currentRoute === "verifier"
                   ? "border-blue-600 text-blue-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <Search className="h-4 w-4" />
-              Ballot Receipt Verifier
+              Receipt Verifier
             </button>
+
             <button
-              onClick={() => setActiveTab("districts")}
+              onClick={() => navigate("explorer")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                activeTab === "districts"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Layers className="h-4 w-4" />
-              Multi-District Nodes & Sync
-            </button>
-            <button
-              onClick={() => setActiveTab("explorer")}
-              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                activeTab === "explorer"
+                currentRoute === "explorer"
                   ? "border-blue-600 text-blue-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <Database className="h-4 w-4" />
-              Blockchain Explorer & Tally
+              Chain Explorer
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      {/* Main Page Body Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {notification && (
           <div
-            className={`p-4 rounded-xl border flex items-center justify-between text-xs font-medium animate-in fade-in duration-200 ${
+            className={`mb-6 p-4 rounded-xl border flex items-center justify-between text-xs font-medium ${
               notification.type === "ok"
                 ? "bg-emerald-50 text-emerald-900 border-emerald-200"
                 : "bg-red-50 text-red-900 border-red-200"
@@ -373,26 +407,38 @@ export function App() {
               )}
               <span>{notification.message}</span>
             </div>
-            <button
-              onClick={() => setNotification(null)}
-              className="text-slate-400 hover:text-slate-600 ml-4 font-bold"
-            >
+            <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-600">
               ✕
             </button>
           </div>
         )}
 
-        {/* Tab 1: Live Voting Booth */}
-        {activeTab === "booth" && (
+        {/* Page 1: Candidate Portal (/candidate) */}
+        {currentRoute === "candidate" && <CandidatePage />}
+
+        {/* Page 2: Admin Portal (/admin) */}
+        {currentRoute === "admin" && <AdminPage />}
+
+        {/* Page 3: System Check (/system-check) */}
+        {currentRoute === "system-check" && <SystemCheckPage />}
+
+        {/* Page 4: Architectural Explanation (/explanation) */}
+        {currentRoute === "explanation" && <ExplanationPage />}
+
+        {/* Page 5: Receipt Verifier (/verifier) */}
+        {currentRoute === "verifier" && <ReceiptVerifier />}
+
+        {/* Page 6: Voting Booth (Default / /booth) */}
+        {currentRoute === "booth" && (
           <div className="space-y-6">
-            {/* Embedded Interactive Hardware Peripheral */}
+            {/* Embedded Live Hardware Peripheral with Face Bounding Box Tracker */}
             <BoothHardwareSim
               onCardTapped={(vId) => {
                 setSelectedVoterId(vId);
                 handleAuthenticateVoter(vId);
               }}
               onLivenessVerified={() => {
-                notify("Biometric liveness gate passed. Voter eligibility unlocked.", "ok");
+                notify("Biometric face bounding box algorithm verified voter identity.", "ok");
               }}
             />
 
@@ -405,7 +451,7 @@ export function App() {
                       1. Voter Identification & Token Dispenser
                     </h2>
                     <p className="text-xs text-slate-500">
-                      Simulates RFID contactless scan and biological liveness gate
+                      Voter verification and anonymous one-time token generation
                     </p>
                   </div>
                   <span className="text-xs font-mono font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
@@ -558,130 +604,17 @@ export function App() {
           </div>
         )}
 
-        {/* Tab 2: 10-Stage Protocol Examiner */}
-        {activeTab === "examiner" && <ExaminerFlow />}
-
-        {/* Tab 3: Ballot Receipt Verifier */}
-        {activeTab === "verifier" && <ReceiptVerifier />}
-
-        {/* Tab 4: Multi-District Nodes & Checkpoint Sync */}
-        {activeTab === "districts" && (
-          <div className="space-y-6">
-            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Multi-District Consensus Nodes & Checkpoint Registry
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Simulate autonomous district nodes, network partitions, and upward state checkpoint aggregation.
-                  </p>
-                </div>
-                <button
-                  onClick={handleProduceCheckpoint}
-                  className="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition"
-                >
-                  Seal State Checkpoint Root
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {districts.map((d) => (
-                  <div
-                    key={d.id}
-                    className={`rounded-xl border p-4 text-xs space-y-3 transition ${
-                      d.status === "ONLINE"
-                        ? "border-slate-200 bg-white"
-                        : "border-red-300 bg-red-50/40"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900">{d.name}</span>
-                      <span
-                        className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${
-                          d.status === "ONLINE"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {d.status}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1 font-mono text-[11px] text-slate-600">
-                      <div>Block Height: <strong className="text-slate-900">{d.blockHeight}</strong></div>
-                      <div className="truncate text-slate-500" title={d.lastCheckpointHash}>
-                        Last Root: {d.lastCheckpointHash.slice(0, 16)}...
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex gap-2">
-                      {d.status === "ONLINE" ? (
-                        <button
-                          onClick={() => handlePartitionDistrict(d.id)}
-                          className="flex-1 rounded-lg border border-red-200 bg-white py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50 transition"
-                        >
-                          Partition Node
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleRecoverDistrict(d.id)}
-                          className="flex-1 rounded-lg bg-emerald-600 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 transition"
-                        >
-                          Reconnect & Sync
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Checkpoints table */}
-              <div className="border border-slate-200 rounded-lg overflow-hidden text-xs mt-4">
-                <div className="bg-slate-50 p-2.5 font-bold text-slate-700 border-b border-slate-200 flex justify-between">
-                  <span>State / National Checkpoint Archive</span>
-                  <span className="text-slate-400 font-normal">Indexed roots for disaster recovery</span>
-                </div>
-                {checkpoints.length === 0 ? (
-                  <div className="p-4 text-center text-slate-400 italic">
-                    No state checkpoints sealed yet. Click "Seal State Checkpoint Root" above to generate.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {checkpoints.map((cp) => (
-                      <div key={cp.checkpointIndex} className="p-3 bg-white flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-slate-900">
-                            Checkpoint #{cp.checkpointIndex}
-                          </div>
-                          <div className="font-mono text-[11px] text-blue-700">
-                            State Root: {cp.stateRootHash}
-                          </div>
-                        </div>
-                        <div className="text-right text-[11px] text-slate-500">
-                          <div>{new Date(cp.timestamp).toLocaleTimeString()}</div>
-                          <div>{cp.totalBlocksSummarized} blocks summarized</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 5: Blockchain Explorer */}
-        {activeTab === "explorer" && (
+        {/* Page 7: Blockchain Explorer (/explorer) */}
+        {currentRoute === "explorer" && (
           <div className="space-y-6">
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">
-                    Permanent Consensus Chain Blocks
+                    Consensus Blockchain Blocks
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Direct cryptographic audit of blocks, Merkle roots, and hash linkages
+                    Cryptographic audit of blocks, Merkle roots, and hash linkages
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -700,7 +633,7 @@ export function App() {
                     ) : (
                       <>
                         <AlertOctagon className="h-3.5 w-3.5 text-red-600" />
-                        <span>Chain Integrity Compromised ({chainErrors.length} errors)</span>
+                        <span>Integrity Failed ({chainErrors.length} errors)</span>
                       </>
                     )}
                   </div>
@@ -725,7 +658,6 @@ export function App() {
                 </div>
               )}
 
-              {/* Blocks Visualizer */}
               <div className="flex gap-4 overflow-x-auto pb-4 pt-1">
                 {chain.map((b) => {
                   const isTampered = b.districtId.includes("TAMPERED");
@@ -798,19 +730,6 @@ export function App() {
           </div>
         )}
       </main>
-
-      {/* Modals */}
-      <SystemCheckModal isOpen={showSystemCheck} onClose={() => setShowSystemCheck(false)} />
-      <CandidateLoginModal isOpen={showCandidateLogin} onClose={() => setShowCandidateLogin(false)} />
-      <AdminLoginModal
-        isOpen={showAdminLogin}
-        onClose={() => setShowAdminLogin(false)}
-        chainStats={{
-          totalVotes: tally?.totalVotes ?? 0,
-          blockCount: chain.length,
-          voterCount: voters.length
-        }}
-      />
     </div>
   );
 }
