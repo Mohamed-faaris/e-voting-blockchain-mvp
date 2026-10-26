@@ -12,11 +12,10 @@ import {
   Key,
   Compass,
   Search,
-  Layers,
   GitFork,
   Boxes,
-  Zap,
-  Sprout
+  Radio,
+  FileCheck
 } from "lucide-react";
 import { SystemCheckPage } from "./pages/SystemCheckPage";
 import { CandidatePage } from "./pages/CandidatePage";
@@ -24,37 +23,17 @@ import { AdminPage } from "./pages/AdminPage";
 import { ExplanationPage } from "./pages/ExplanationPage";
 import { MerkleTreePage } from "./pages/MerkleTreePage";
 import { BlockExplorerPage } from "./pages/BlockExplorerPage";
+import { VoterCheckinPage } from "./pages/VoterCheckinPage";
+import { BallotCastingPage } from "./pages/BallotCastingPage";
+import { BallotReceiptPage } from "./pages/BallotReceiptPage";
 import { ReceiptVerifier } from "./components/ReceiptVerifier";
-import { BoothHardwareSim } from "./components/BoothHardwareSim";
-
-interface Voter {
-  voterId: string;
-  name: string;
-  districtId: string;
-  hasVoted: boolean;
-  issuedTokenId?: string;
-}
-
-interface Candidate {
-  id: string;
-  name: string;
-  party: string;
-  symbol: string;
-}
-
-interface Block {
-  index: number;
-  districtId: string;
-  timestamp: string;
-  transactions: any[];
-  previousHash: string;
-  merkleRoot: string;
-  hash: string;
-}
 
 export function App() {
   const validRoutes = [
     "booth",
+    "booth-checkin",
+    "booth-ballot",
+    "booth-receipt",
     "candidate",
     "admin",
     "system-check",
@@ -69,7 +48,7 @@ export function App() {
     if (validRoutes.includes(hash)) {
       return hash;
     }
-    return "booth";
+    return "booth-checkin";
   };
 
   const [currentRoute, setCurrentRoute] = useState<string>(getRouteFromHash());
@@ -85,16 +64,7 @@ export function App() {
     setCurrentRoute(route);
   };
 
-  // Core Data
-  const [voters, setVoters] = useState<Voter[]>([]);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [chain, setChain] = useState<Block[]>([]);
-  const [chainValid, setChainValid] = useState<boolean>(true);
-  const [chainErrors, setChainErrors] = useState<string[]>([]);
-  const [tally, setTally] = useState<any>(null);
-
-  // Booth State
-  const [selectedVoterId, setSelectedVoterId] = useState("");
+  // Shared Booth Session State
   const [activeToken, setActiveToken] = useState<{
     tokenId: string;
     publicKey: string;
@@ -102,8 +72,8 @@ export function App() {
     districtId: string;
     voterName: string;
   } | null>(null);
-  const [selectedCandidateId, setSelectedCandidateId] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  const [lastReceipt, setLastReceipt] = useState<any>(null);
   const [notification, setNotification] = useState<{ message: string; type: "ok" | "err" } | null>(null);
 
   const notify = (message: string, type: "ok" | "err") => {
@@ -111,105 +81,12 @@ export function App() {
     setTimeout(() => setNotification(null), 6000);
   };
 
-  const loadAll = async () => {
-    try {
-      const [vRes, cRes, chRes, valRes, tRes] = await Promise.all([
-        fetch("/api/voters").then((r) => r.json()),
-        fetch("/api/candidates").then((r) => r.json()),
-        fetch("/chain").then((r) => r.json()),
-        fetch("/chain/verify").then((r) => r.json()),
-        fetch("/api/tally").then((r) => r.json())
-      ]);
-
-      if (vRes.voters) {
-        setVoters(vRes.voters);
-        if (!selectedVoterId && vRes.voters.length > 0) {
-          const firstEligible = vRes.voters.find((v: Voter) => !v.hasVoted);
-          if (firstEligible) setSelectedVoterId(firstEligible.voterId);
-        }
-      }
-      if (cRes.candidates) setCandidates(cRes.candidates);
-      if (chRes.blocks) setChain(chRes.blocks);
-      if (valRes) {
-        setChainValid(valRes.valid);
-        setChainErrors(valRes.errors || []);
-      }
-      if (tRes) setTally(tRes);
-    } catch (err) {
-      console.error("Failed to load chain data", err);
-    }
-  };
-
-  useEffect(() => {
-    loadAll();
-    const interval = setInterval(loadAll, 12000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleAuthenticateVoter = async (voterIdToAuth?: string) => {
-    const id = voterIdToAuth || selectedVoterId;
-    if (!id) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/voter/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voterId: id })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Authentication failed");
-
-      setActiveToken({
-        tokenId: data.token.tokenId,
-        publicKey: data.token.publicKey,
-        privateKey: data.token.privateKey,
-        districtId: data.voter.districtId,
-        voterName: data.voter.name
-      });
-      notify(`Verified: ${data.voter.name}. One-time token ${data.token.tokenId} issued.`, "ok");
-      loadAll();
-    } catch (err: any) {
-      notify(err.message, "err");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCastVote = async () => {
-    if (!activeToken || !selectedCandidateId) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/vote/cast", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          districtId: activeToken.districtId,
-          tokenId: activeToken.tokenId,
-          candidateId: selectedCandidateId,
-          publicKey: activeToken.publicKey,
-          privateKey: activeToken.privateKey
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to submit ballot");
-
-      notify(`Vote sealed in Block #${data.receipt.blockIndex}. Hash: ${data.receipt.blockHash.slice(0, 16)}...`, "ok");
-      setActiveToken(null);
-      setSelectedCandidateId("");
-      loadAll();
-    } catch (err: any) {
-      notify(err.message, "err");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
-      {/* Top Header - Pure clean navigation */}
+      {/* Top Header */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("booth")}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("booth-checkin")}>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white shadow-xs">
               <Shield className="h-5 w-5" />
             </div>
@@ -219,88 +96,93 @@ export function App() {
                   Consensus Electronic Voting System
                 </h1>
                 <span className="text-[11px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-mono">
-                  v0.4
+                  v0.5-prod
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                End-to-End Cryptographic Ledger & Merkle Verification Protocol
+                Discrete Multi-Page Voting Booth & Cryptographic Consensus Ledger
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={loadAll}
-              title="Refresh ledger state"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+              onClick={() => navigate("system-check")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                currentRoute === "system-check"
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-800 shadow-2xs"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span>Sync Chain</span>
+              <Activity className="h-4 w-4 text-emerald-600" />
+              <span>System Check</span>
             </button>
           </div>
         </div>
 
-        {/* Primary Multi-Page Navigation Bar */}
+        {/* Global Multi-Page Navigation Bar */}
         <div className="border-t border-slate-100 bg-white px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto flex gap-6 text-xs font-semibold overflow-x-auto">
             <button
-              onClick={() => navigate("booth")}
+              onClick={() => navigate("booth-checkin")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                currentRoute === "booth"
+                currentRoute === "booth-checkin" || currentRoute === "booth"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Radio className="h-4 w-4" />
+              1. Voter Check-in
+            </button>
+
+            <button
+              onClick={() => navigate("booth-ballot")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "booth-ballot"
                   ? "border-blue-600 text-blue-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <Vote className="h-4 w-4" />
-              Voting Booth
+              2. Secret Ballot
             </button>
+
+            <button
+              onClick={() => navigate("booth-receipt")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "booth-receipt"
+                  ? "border-blue-600 text-blue-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <FileCheck className="h-4 w-4" />
+              3. Vote Receipt
+            </button>
+
+            <div className="h-5 w-px bg-slate-200 self-center" />
 
             <button
               onClick={() => navigate("candidate")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                 currentRoute === "candidate"
-                  ? "border-blue-600 text-blue-600 font-bold"
+                  ? "border-indigo-600 text-indigo-600 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <Users className="h-4 w-4" />
-              Candidate Scrutineer Portal
+              Candidate Scrutineer
             </button>
 
             <button
               onClick={() => navigate("admin")}
               className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
                 currentRoute === "admin"
-                  ? "border-blue-600 text-blue-600 font-bold"
+                  ? "border-slate-900 text-slate-900 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <Lock className="h-4 w-4" />
               Admin Portal
-            </button>
-
-            <button
-              onClick={() => navigate("system-check")}
-              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                currentRoute === "system-check"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Activity className="h-4 w-4" />
-              System Check
-            </button>
-
-            <button
-              onClick={() => navigate("merkle-tree")}
-              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
-                currentRoute === "merkle-tree"
-                  ? "border-blue-600 text-blue-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <GitFork className="h-4 w-4" />
-              Merkle Tree Explorer
             </button>
 
             <button
@@ -313,6 +195,18 @@ export function App() {
             >
               <Boxes className="h-4 w-4" />
               Block Inspector
+            </button>
+
+            <button
+              onClick={() => navigate("merkle-tree")}
+              className={`py-3 border-b-2 flex items-center gap-2 whitespace-nowrap transition ${
+                currentRoute === "merkle-tree"
+                  ? "border-indigo-600 text-indigo-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <GitFork className="h-4 w-4" />
+              Merkle Tree
             </button>
 
             <button
@@ -342,7 +236,7 @@ export function App() {
         </div>
       </header>
 
-      {/* Main Content Area */}
+      {/* Main Routed Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {notification && (
           <div
@@ -366,7 +260,43 @@ export function App() {
           </div>
         )}
 
-        {/* Routed Pages */}
+        {/* Voting Booth Flow Stage 1: Checkin & Token Dispenser */}
+        {(currentRoute === "booth-checkin" || currentRoute === "booth") && (
+          <VoterCheckinPage
+            onTokenIssued={(tokenData) => {
+              setActiveToken(tokenData);
+              notify(`One-time anonymous token issued for ${tokenData.voterName}. Ready for ballot selection.`, "ok");
+            }}
+            onNavigate={navigate}
+          />
+        )}
+
+        {/* Voting Booth Flow Stage 2: Secret Ballot Selection */}
+        {currentRoute === "booth-ballot" && (
+          <BallotCastingPage
+            tokenData={activeToken}
+            onVoteCast={(receipt) => {
+              setLastReceipt(receipt);
+              setActiveToken(null);
+              notify(`Ballot committed into Block #${receipt.blockIndex}.`, "ok");
+            }}
+            onNavigate={navigate}
+          />
+        )}
+
+        {/* Voting Booth Flow Stage 3: Official Cryptographic Vote Receipt */}
+        {currentRoute === "booth-receipt" && (
+          <BallotReceiptPage
+            receipt={lastReceipt}
+            onNavigate={navigate}
+            onResetSession={() => {
+              setActiveToken(null);
+              setLastReceipt(null);
+            }}
+          />
+        )}
+
+        {/* Other Dedicated Pages */}
         {currentRoute === "candidate" && <CandidatePage />}
         {currentRoute === "admin" && <AdminPage />}
         {currentRoute === "system-check" && <SystemCheckPage />}
@@ -374,196 +304,6 @@ export function App() {
         {currentRoute === "merkle-tree" && <MerkleTreePage />}
         {currentRoute === "blocks" && <BlockExplorerPage />}
         {currentRoute === "verifier" && <ReceiptVerifier />}
-
-        {/* Voting Booth Default Route */}
-        {currentRoute === "booth" && (
-          <div className="space-y-6">
-            <BoothHardwareSim
-              onCardTapped={(vId) => {
-                setSelectedVoterId(vId);
-                handleAuthenticateVoter(vId);
-              }}
-              onLivenessVerified={() => {
-                notify("Biometric face bounding box algorithm verified voter identity.", "ok");
-              }}
-            />
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Step 1: Voter Authentication */}
-              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900">
-                      1. Voter Identification & Token Dispenser
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                      Voter verification and anonymous one-time token generation
-                    </p>
-                  </div>
-                  <span className="text-xs font-mono font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                    Step 1 of 2
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Select Registered Voter from Official Electoral Registry:
-                  </label>
-                  <select
-                    value={selectedVoterId}
-                    onChange={(e) => {
-                      setSelectedVoterId(e.target.value);
-                      setActiveToken(null);
-                    }}
-                    className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
-                  >
-                    {voters.map((v) => (
-                      <option key={v.voterId} value={v.voterId} disabled={v.hasVoted}>
-                        {v.voterId} — {v.name} (District {v.districtId}){" "}
-                        {v.hasVoted ? "— [BALLOT RECORDED]" : ""}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    onClick={() => handleAuthenticateVoter()}
-                    disabled={loading || !selectedVoterId}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-xs disabled:opacity-50"
-                  >
-                    <Key className="h-4 w-4" />
-                    Verify Voter & Issue Anonymous Token
-                  </button>
-                </div>
-
-                {activeToken && (
-                  <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4 text-xs space-y-2">
-                    <div className="flex items-center justify-between font-semibold text-blue-900">
-                      <span>Authenticated Voter: {activeToken.voterName}</span>
-                      <span className="text-[10px] bg-blue-200/80 px-2 py-0.5 rounded text-blue-800 font-mono">
-                        District {activeToken.districtId}
-                      </span>
-                    </div>
-                    <div className="font-mono text-[11px] text-blue-800 break-all bg-white p-2.5 rounded border border-blue-200">
-                      <span className="text-slate-400 font-sans block text-[10px] font-semibold">
-                        Anonymous One-Time Token ID:
-                      </span>
-                      {activeToken.tokenId}
-                    </div>
-                    <p className="text-[11px] text-blue-700">
-                      Ephemeral Ed25519 booth key generated in browser memory for signing.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Step 2: Ballot Casting */}
-              <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900">
-                      2. Secret Ballot Selection & Cryptographic Dispatch
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                      Salted ballot encryption + Ed25519 booth transaction signature
-                    </p>
-                  </div>
-                  <span className="text-xs font-mono font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                    Step 2 of 2
-                  </span>
-                </div>
-
-                <div className="space-y-2.5">
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Official Certified Candidates:
-                  </label>
-                  {candidates.map((c) => (
-                    <div
-                      key={c.id}
-                      onClick={() => activeToken && setSelectedCandidateId(c.id)}
-                      className={`p-3 rounded-lg border text-xs cursor-pointer transition flex items-center justify-between ${
-                        selectedCandidateId === c.id
-                          ? "border-blue-600 bg-blue-50/70 shadow-2xs font-semibold"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      } ${!activeToken ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
-                          {c.id === "cand-1" ? (
-                            <Zap className="h-4 w-4 text-blue-600" />
-                          ) : c.id === "cand-2" ? (
-                            <Shield className="h-4 w-4 text-indigo-600" />
-                          ) : (
-                            <Sprout className="h-4 w-4 text-emerald-600" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-slate-900 font-bold">{c.name}</div>
-                          <div className="text-slate-500 text-[11px] font-medium">{c.party} ({c.symbol})</div>
-                        </div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="candidate"
-                        checked={selectedCandidateId === c.id}
-                        onChange={() => {}}
-                        disabled={!activeToken}
-                        className="text-blue-600 focus:ring-blue-500"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleCastVote}
-                  disabled={loading || !activeToken || !selectedCandidateId}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 transition shadow-xs disabled:opacity-40"
-                >
-                  <Lock className="h-4 w-4" />
-                  Encrypt Ballot & Commit to Consensus Ledger
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Overview Tally Card */}
-            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-slate-900 text-sm">
-                  Live District Balloting Summary
-                </h3>
-                <span className="text-xs text-slate-500">
-                  Total Votes Cast: <strong>{tally?.totalVotes || 0}</strong>
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {tally?.results?.map((res: any) => (
-                  <div key={res.id} className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                        {res.id === "cand-1" ? (
-                          <Zap className="h-3.5 w-3.5 text-blue-600" />
-                        ) : res.id === "cand-2" ? (
-                          <Shield className="h-3.5 w-3.5 text-indigo-600" />
-                        ) : (
-                          <Sprout className="h-3.5 w-3.5 text-emerald-600" />
-                        )}
-                        {res.name}
-                      </span>
-                      <span className="font-mono text-slate-600">
-                        {res.votes} votes ({res.percentage}%)
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                        style={{ width: `${res.percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
