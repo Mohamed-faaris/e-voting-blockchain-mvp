@@ -229,7 +229,8 @@ app.post("/api/vote/cast", async (c) => {
       tokenId: body.tokenId,
       encryptedVote,
       privateKey: body.privateKey,
-      publicKey: body.publicKey
+      publicKey: body.publicKey,
+      requireIssuedToken: true
     });
     return c.json({
       message: "Vote recorded on blockchain block successfully.",
