@@ -13,7 +13,7 @@ import {
   CANDIDATES,
   resetDemoData,
   storage
-} from "./storage/sqlite.js";
+} from "./storage/postgres.js";
 import { demoEncryptBallot, demoDecryptBallot, validatorKeys } from "./blockchain/crypto.js";
 import {
   getDistrictsStatus,
@@ -72,7 +72,7 @@ app.get("/api/system/stats", async (c) => {
     timestamp: new Date().toISOString(),
     uptimeSeconds,
     database: {
-      provider: process.env.TURSO_DATABASE_URL ? "Turso Cloud (libSQL)" : "Local SQLite (node:sqlite)",
+      provider: "PostgreSQL",
       status: dbStatus,
       latencyMs: dbLatencyMs,
       error: dbError,
@@ -101,7 +101,7 @@ app.get("/api/system/stats", async (c) => {
 app.get("/api/info", (c) => c.json({
   name: "Electronic Voting Blockchain MVP",
   status: "running",
-  database: process.env.TURSO_DATABASE_URL ? "Turso Cloud (libSQL)" : "Local SQLite",
+  database: "PostgreSQL",
   disclaimer: "Demonstration & Prototype; simulated cryptographic voting components.",
   validatorPublicKey: validatorKeys.publicKey
 }));
@@ -118,7 +118,7 @@ app.get("/api/health", async (c) => {
 
   return c.json({
     ok: dbOk,
-    database: process.env.TURSO_DATABASE_URL ? "turso" : "sqlite",
+    database: "postgresql",
     latencyMs: latency
   });
 });
