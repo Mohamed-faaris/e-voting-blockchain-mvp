@@ -1,2 +1,2 @@
 import { defineConfig } from "drizzle-kit";
-export default defineConfig({dialect:"postgresql",schema:"./src/schema.ts",out:"./drizzle",dbCredentials:{url:process.env.DATABASE_URL??"postgres://postgres:postgres@localhost:5432/evoting_demo"},strict:true,verbose:true});
+export default defineConfig({dialect:"postgresql",schema:"./src/schema.ts",out:"./drizzle",dbCredentials:{url:process.env.DATABASE_URL??"postgres://evoting:evoting_dev_only@localhost:5432/evoting"},strict:true,verbose:true});
