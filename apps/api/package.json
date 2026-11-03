@@ -8,7 +8,9 @@
     "build": "tsc -p tsconfig.json",
     "start": "pnpm --filter @evoting/database build && node --env-file=../../.env dist/server.js",
     "test": "tsx --test src/**/*.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:seed": "node --env-file=../../.env --import tsx src/seed-demo.ts",
+    "db:verify": "node --env-file=../../.env --import tsx src/verify-ledger.ts"
   },
   "dependencies": {
     "@evoting/database": "workspace:*",

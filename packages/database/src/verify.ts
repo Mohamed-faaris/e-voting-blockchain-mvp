@@ -11,7 +11,6 @@ try {
     if (!rows[0]?.relation) failures.push(`Missing table: ${table}`);
     else console.log(`PASS table ${table}`);
   }
-
   const [voterStats] = await client`
     SELECT COUNT(*)::int AS total,
            COUNT(*) FILTER (WHERE has_voted = TRUE)::int AS voted,
@@ -26,32 +25,31 @@ try {
   else console.log(`PASS voted-voter count: ${voted} (baseline: ${DEMO_VOTED_COUNT})`);
   if (Number(voterStats.incomplete) !== 0) failures.push(`Found ${voterStats.incomplete} incomplete demo voter records`);
 
-  const blocks = await client`
-    SELECT block_index, block_hash, previous_hash, payload_json
-    FROM blocks ORDER BY block_index ASC
-  `;
-  if (blocks.length === 0) {
-    console.warn("WARN no genesis block yet; start the API once to initialize the ledger.");
-  } else {
+  const blocks = await client`SELECT block_index, block_hash, previous_hash, payload_json FROM blocks ORDER BY block_index ASC`;
+  if (blocks.length === 0) failures.push("Ledger is empty; run pnpm db:seed to initialize the genesis block and demo ballots.");
+  else {
     for (let index = 0; index < blocks.length; index++) {
       const row = blocks[index];
       const payload = row.payload_json as { index?: number; hash?: string; previousHash?: string };
       if (Number(row.block_index) !== index) failures.push(`Non-contiguous block index at position ${index}`);
-      if (Number(payload.index) !== Number(row.block_index) || payload.hash !== String(row.block_hash)) {
-        failures.push(`Block payload does not match indexed columns at block ${row.block_index}`);
-      }
+      if (Number(payload.index) !== Number(row.block_index) || payload.hash !== String(row.block_hash)) failures.push(`Block payload does not match indexed columns at block ${row.block_index}`);
       if (payload.previousHash !== String(row.previous_hash)) failures.push(`Previous-hash column mismatch at block ${row.block_index}`);
-      if (index > 0 && payload.previousHash !== String((blocks[index - 1].payload_json as { hash: string }).hash)) {
-        failures.push(`Broken previous-hash link at block ${row.block_index}`);
-      }
+      if (index > 0 && payload.previousHash !== String((blocks[index - 1].payload_json as { hash: string }).hash)) failures.push(`Broken previous-hash link at block ${row.block_index}`);
     }
     if (Number(blocks[0].block_index) !== 0) failures.push("Ledger must start with genesis block index 0");
     else console.log(`PASS ledger structure: ${blocks.length} block(s)`);
   }
 
+  const [demoVoteStats] = await client`
+    SELECT COUNT(*)::int AS transactions, COUNT(DISTINCT token_id)::int AS unique_tokens
+    FROM transactions WHERE id LIKE 'DEMO-TX-%'
+  `;
+  if (Number(demoVoteStats.transactions) !== DEMO_VOTED_COUNT || Number(demoVoteStats.unique_tokens) !== DEMO_VOTED_COUNT) {
+    failures.push(`Expected ${DEMO_VOTED_COUNT} deterministic demo ballot transactions with unique tokens; found ${demoVoteStats.transactions} transactions and ${demoVoteStats.unique_tokens} unique tokens`);
+  } else console.log(`PASS deterministic demo ballots: ${demoVoteStats.transactions}`);
+
   const [invalidTokenTransactions] = await client`
-    SELECT COUNT(*)::int AS total
-    FROM transactions t
+    SELECT COUNT(*)::int AS total FROM transactions t
     INNER JOIN voting_tokens vt ON vt.token_id = t.token_id
     WHERE vt.status <> 'SPENT'
   `;
@@ -62,9 +60,7 @@ try {
     console.error("Database verification failed:");
     for (const failure of failures) console.error(`- ${failure}`);
     process.exitCode = 1;
-  } else {
-    console.log("Database verification passed.");
-  }
+  } else console.log("Database verification passed.");
 } finally {
   await client.end();
 }

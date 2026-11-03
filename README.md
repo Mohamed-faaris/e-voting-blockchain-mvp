@@ -42,12 +42,12 @@ The API uses PostgreSQL through the shared `@evoting/database` package. Drizzle 
 |---|---|
 | `pnpm db:generate` | Generate Drizzle migration files after schema changes |
 | `pnpm db:migrate` | Apply the idempotent PostgreSQL schema migration |
-| `pnpm db:seed` | Insert the deterministic demo voter baseline without overwriting existing demo voter state |
-| `pnpm db:reset` | Destructively clear demo votes, tokens, blocks, and voters, then recreate the voter seed |
-| `pnpm db:verify` | Check required tables, seeded voters, ledger links, and token/transaction state |
+| `pnpm db:seed` | Seed 5,000 synthetic voters, 3,250 corresponding ballot transactions, spent tokens and district blocks |
+| `pnpm db:reset` | Destructively clear demo votes, tokens, blocks and voters, then rebuild the complete synthetic demo dataset |
+| `pnpm db:verify` | Check tables, voter/ballot counts, token states, database links and cryptographic blockchain integrity |
 | `pnpm db:studio` | Open Drizzle Studio |
 
-The deterministic seed creates 5,000 synthetic voters in 12 demo districts: 3,250 initially marked as voted and 1,750 initially not voted. Re-running `db:seed` is safe and does not reset existing voter states. Use `db:reset` only when you intentionally want to discard demo ledger and voting state. After a reset, start or restart the API; it creates a fresh genesis block automatically.
+The seed creates 5,000 synthetic voters across 12 demo districts, 3,250 matching synthetic ballot transactions, spent voting tokens and one hash-linked block per district. The remaining 1,750 voters are eligible to try the voter check-in and voting flow. Demo ballots are distributed deterministically across the three built-in candidates. Re-running `pnpm db:seed` does not overwrite existing voter state or ledger data. Use `pnpm db:reset` only when you intentionally want to discard all demo votes, tokens and blocks before rebuilding the baseline dataset.
 
 Local PostgreSQL is provided by Docker Compose:
 ```zsh
@@ -72,7 +72,7 @@ On the API deployment, set `ALLOWED_ORIGINS` to a comma-separated list of the fo
 - `packages/design-system`: shared light-theme tokens and responsive shell styles.
 - `packages/contracts`: shared API/domain TypeScript contracts.
 - `packages/api-client`: typed fetch client for existing routes; supports cross-origin API base configuration.
-- `packages/database`: Drizzle schema, PostgreSQL client and migration, seed, reset and verification scripts.
+- `packages/database`: Drizzle schema, PostgreSQL client and migration, voter seed, reset and database verification scripts. The API workspace seeds and verifies the demo blockchain ledger.
 - `packages/seed`: deterministic synthetic voter fixture (5,000 records; 3,250 initially voted and 1,750 initially not voted).
 
 ## Existing capabilities retained

@@ -8,7 +8,7 @@ try {
     await tx.execute(sql.raw("TRUNCATE TABLE transactions, blocks, voting_tokens, voters RESTART IDENTITY CASCADE"));
     await tx.insert(voters).values(buildDemoVoters());
   });
-  console.log(`Database reset complete. Seeded ${DEMO_VOTER_COUNT} synthetic voters (${DEMO_VOTED_COUNT} voted, ${DEMO_VOTER_COUNT - DEMO_VOTED_COUNT} not voted). The API creates a fresh genesis block on startup.`);
+  console.log(`Database reset complete. Recreated ${DEMO_VOTER_COUNT} synthetic voter fixtures. The root pnpm db:reset command follows this with the synthetic ballots and blockchain seed.`);
 } finally {
   await client.end();
 }
