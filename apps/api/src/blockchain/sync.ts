@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Block } from "./types.js";
-import { getChain } from "../storage/sqlite.js";
+import { getChain } from "../storage/postgres.js";
 
 export interface DistrictNode {
   id: string;
