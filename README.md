@@ -1,30 +1,90 @@
-# Electronic Voting Blockchain MVP (demo only)
+# Electronic Voting Blockchain MVP
 
-This first milestone implements the blockchain module before voter UI or hardware:
-- SHA-256 hash-linked blocks
-- Merkle root over each block's transactions
-- SQLite persistence
-- chain integrity verification
-- one-time token reference enforcement (unique DB constraint)
-- demo endpoint that deliberately tampers with a block to demonstrate detection
+> **Educational demonstration only. Not suitable for conducting real elections.**
 
-**Not for real elections.** The `encryptedVote` field is demo input only; this project does not yet implement ballot encryption, anonymous credentials, real identity verification, certificate infrastructure, distributed consensus, or production key management.
+This repository is being migrated to a PNPM + Turborepo monorepo. The current branch, `refactor/turborepo-monorepo`, establishes the workspace foundation while keeping the existing Hono API, React UI and SQLite/Turso storage implementation available during the migration.
+
+## Current capabilities
+
+- SHA-256 hash-linked blocks and Merkle roots
+- Chain integrity verification
+- Ed25519 transaction/block signing in the demo implementation
+- One-time token reference enforcement
+- Voter check-in, ballot casting and receipt flow
+- District synchronization simulation
+- Tamper demonstration
+- SQLite/Turso persistence
+
+**Security limitation:** the current demo ballot representation is Base64-encoded data, not ballot encryption. District synchronization is simulated, not distributed consensus. Do not use this project for real elections or real voter data.
 
 ## Requirements
+
 - Node.js 20+
-- npm
-- build tools if `better-sqlite3` needs to compile on your platform
+- PNPM 10+
+- PostgreSQL will be introduced in a later migration phase; the current runtime still uses its existing SQLite/Turso adapter.
 
 ## Run on Ubuntu / zsh
+
 ```zsh
-unzip e-voting-blockchain-mvp.zip
-cd e-voting-mvp
-npm install
-npm test
-npm run dev
+corepack enable
+pnpm install
+
+# Run workspace development tasks (currently the API compatibility workspace)
+pnpm dev
+
+# Explicit legacy API command during migration
+pnpm dev:legacy
+
+# Run existing tests
+pnpm test:legacy
+
+# Type-check the current legacy source
+pnpm typecheck:legacy
+
+# Start the existing Vite frontend separately, if needed
+pnpm exec vite
 ```
 
+The first `pnpm install` will reconcile the lockfile with the new root Turborepo dependency and workspace configuration. Commit the generated lockfile update with the migration.
+
+## Workspace structure
+
+```text
+apps/
+  api/                 # First workspace boundary; currently delegates to legacy src/
+packages/              # Shared packages added in subsequent phases
+src/                   # Existing implementation retained during safe migration
+  blockchain/
+  client/
+  storage/
+  server.ts
+docs/
+  architecture/
+    monorepo-migration.md
+```
+
+Target applications:
+
+- `apps/admin` — Election Command Center
+- `apps/voter` — Voter Portal
+- `apps/explorer` — Blockchain Explorer
+- `apps/candidate` — Candidate Portal
+- `apps/api` — shared Hono backend
+
+Target shared packages:
+
+- `packages/ui` — shadcn/ui components
+- `packages/design-system` — light theme tokens
+- `packages/contracts` — shared Zod schemas and types
+- `packages/api-client` — typed API client
+- `packages/database` — Drizzle ORM, PostgreSQL schema and migrations
+- `packages/blockchain` — shared blockchain primitives
+- `packages/seed` — deterministic synthetic demo data
+
+See [the migration plan](docs/architecture/monorepo-migration.md) for the staged migration rules and sequence.
+
 ## Try the API
+
 ```zsh
 # Genesis chain
 curl http://localhost:3000/chain
@@ -47,24 +107,13 @@ curl -X POST http://localhost:3000/demo/tamper/1
 curl http://localhost:3000/chain/verify
 ```
 
-The database defaults to `./data/voting-demo.sqlite`. Override with `DB_PATH=/path/to/file.sqlite`.
+The current database defaults to `./data/voting-demo.sqlite`. Override with `DB_PATH=/path/to/file.sqlite`.
 
-## Project layout
-```text
-src/
-  blockchain/
-    types.ts       # transaction and block types
-    chain.ts       # hashes, Merkle root, block creation, chain validation
-    chain.test.ts  # unit tests
-  storage/
-    sqlite.ts      # SQLite schema and persistence
-  server.ts         # Hono API
-```
+## Migration principles
 
-## Next milestones
-1. Add Ed25519 signing and verification for block/transaction payloads.
-2. Add a token service with atomic token redemption.
-3. Add a simulated voter UI and candidate selection.
-4. Add authenticated/encrypted ballot handling using a defined cryptographic protocol.
-5. Split the district validator into a service and add synchronization checkpoints.
-6. Add admin dashboard and monitoring.
+1. Keep the existing API contracts and voting behavior working while moving files.
+2. Introduce PostgreSQL and Drizzle behind a storage boundary; do not remove SQLite until parity tests pass.
+3. Keep one shared Hono API and one authoritative database for all four portals.
+4. Generate synthetic voter data only. The planned demo dataset is 5,000 voters, with 3,250 voted and 1,750 not voted.
+5. Verify that seeded transactions, voter statuses, block hashes, Merkle roots and signatures agree.
+6. Never expose private validator keys or voter-to-ballot links through browser-facing APIs.
