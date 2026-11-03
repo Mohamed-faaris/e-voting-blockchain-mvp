@@ -1,29 +1,11 @@
-import { createDatabase, voters } from "@evoting/database";
 import { sql } from "drizzle-orm";
-import { createDefaultDemoVoters } from "@evoting/seed";
-
+import { createDatabase, voters } from "./index.js";
+const given = ["Aarav","Aditi","Akash","Anaya","Arjun","Diya","Ishan","Kavya","Mira","Neel","Rohan","Sana","Tara","Vihaan","Zoya"];
+const family = ["Rao","Iyer","Nair","Shah","Menon","Patel","Das","Kapoor","Reddy","Khan","Fernandes","Pillai"];
+const demoVoters = Array.from({ length: 5000 }, (_, i) => ({ voterId: `DEMO-${String(i + 1).padStart(5, "0")}`, name: `${given[i % given.length]} ${family[Math.floor(i / given.length) % family.length]}`, districtId: `D${(i % 12) + 1}`, hasVoted: i < 3250, issuedTokenId: null }));
 const { db, client } = createDatabase();
-const demoVoters = createDefaultDemoVoters();
-
 try {
-  await db.insert(voters).values(demoVoters.map((voter) => ({
-    voterId: voter.voterId,
-    name: voter.name,
-    districtId: voter.districtId,
-    hasVoted: voter.hasVoted,
-    issuedTokenId: null
-  }))).onConflictDoUpdate({
-    target: voters.voterId,
-    set: {
-      name: sql`excluded.name`,
-      districtId: sql`excluded.district_id`,
-      hasVoted: sql`excluded.has_voted`,
-      issuedTokenId: null
-    }
-  });
-  const [{ count }] = await client`SELECT COUNT(*)::int AS count FROM voters WHERE voter_id LIKE 'DEMO-%'`;
-  const [{ voted }] = await client`SELECT COUNT(*)::int AS voted FROM voters WHERE voter_id LIKE 'DEMO-%' AND has_voted = TRUE`;
-  console.log(`Seeded demo voter rows: ${count}; voted: ${voted}; not voted: ${Number(count) - Number(voted)}`);
-} finally {
-  await client.end();
-}
+ await db.insert(voters).values(demoVoters).onConflictDoUpdate({ target: voters.voterId, set: { name: sql`excluded.name`, districtId: sql`excluded.district_id`, hasVoted: sql`excluded.has_voted`, issuedTokenId: null } });
+ const [totals] = await client`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE has_voted = TRUE)::int AS voted FROM voters WHERE voter_id LIKE 'DEMO-%'`;
+ console.log(`Demo seed complete: ${totals.total} voters; ${totals.voted} voted; ${Number(totals.total) - Number(totals.voted)} not voted.`);
+} finally { await client.end(); }
