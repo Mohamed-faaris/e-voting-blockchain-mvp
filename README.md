@@ -1,111 +1,67 @@
 # Electronic Voting Blockchain MVP
-
 > **Educational demonstration only. Not suitable for conducting real elections.**
 
-This repository uses a PNPM + Turborepo monorepo. The existing React UI and Hono API have been separated into independent workspaces while retaining the current API routes and voting demo flow.
+This repository is a PNPM + Turborepo monorepo with four independent React portals, a shared Hono API, reusable UI/contracts packages and an optional PostgreSQL/Drizzle database package.
 
-## Current capabilities
-
-- SHA-256 hash-linked blocks and Merkle roots
-- Chain integrity verification
-- Ed25519 signing in the demo implementation
-- One-time token reference enforcement
-- Voter check-in, ballot casting and receipt flow
-- District synchronization simulation
-- Tamper demonstration
-- SQLite/Turso persistence
-
-**Security limitation:** the current demo ballot representation is Base64-encoded data, not ballot encryption. District synchronization is simulated, not distributed consensus. Do not use this project for real elections or real voter data.
-
-## Requirements
-
-- Node.js 22+ (the storage adapter uses `node:sqlite`)
-- PNPM 10+
+## Portal applications
+| App | Local URL | Purpose |
+|---|---|---|
+| Admin | http://localhost:5173 | Election operations, all legacy admin routes and system controls |
+| Voter | http://localhost:5174 | Check-in, one-time demo token, ballot casting and receipt |
+| Candidate | http://localhost:5175 | Read-only candidate roster and chain/audit status |
+| Explorer | http://localhost:5176 | Block inspection, Merkle references and receipt lookup |
+| API | http://localhost:3000 | Shared Hono API and persistence |
 
 ## Run on Ubuntu / zsh
-
+Requirements: Node.js 22+, PNPM 10+.
 ```zsh
 corepack enable
-pnpm install --no-frozen-lockfile  # refreshes workspace lockfile on this migration branch
-
-# Start API and admin frontend together
+pnpm install --no-frozen-lockfile # refresh workspace importer lockfile on this branch
 pnpm dev
-
-# Build both workspaces
+```
+Build and validate:
+```zsh
 pnpm build
-
-# Run backend tests
+pnpm typecheck
 pnpm test
 ```
-
-The admin frontend runs on `http://localhost:5173`; the Hono API runs on `http://localhost:3000`. Vite proxies API, chain and demo requests to the backend.
-
-Run each workspace independently:
-
+Run a specific service:
 ```zsh
-pnpm --filter @evoting/api dev
-pnpm --filter @evoting/admin dev
-pnpm --filter @evoting/api test
+pnpm dev:api
+pnpm dev:admin
+pnpm dev:voter
+pnpm dev:candidate
+pnpm dev:explorer
 ```
 
-The API defaults to `../../data/voting-demo.sqlite` when launched through its workspace script. The existing Turso environment variables remain supported.
+## Workspaces
+- `apps/api`: Hono API, current SQLite/Turso adapter and blockchain demo.
+- `apps/admin`, `apps/voter`, `apps/candidate`, `apps/explorer`: independent Vite/React apps.
+- `packages/ui`: common workspace shell and presentation components.
+- `packages/design-system`: shared light-theme design tokens.
+- `packages/contracts`: shared API/domain TypeScript contracts.
+- `packages/api-client`: typed fetch client for the current routes.
+- `packages/database`: Drizzle schema and PostgreSQL client/migration; opt-in, not yet wired into runtime storage.
+- `packages/seed`: deterministic synthetic 5,000-voter fixture (3,250 voted / 1,750 not voted).
 
-## Workspace structure
-
-```text
-apps/
-  api/
-    src/
-      blockchain/
-      storage/
-      server.ts
-  admin/
-    src/
-      components/
-      pages/
-      App.tsx
-      main.tsx
-    public/models/
-packages/              # shared packages added in subsequent phases
-api/index.ts           # Vercel Hono adapter
-docs/architecture/
-```
-
-Target applications:
-
-- `apps/admin` — Election Command Center
-- `apps/voter` — Voter Portal
-- `apps/explorer` — Blockchain Explorer
-- `apps/candidate` — Candidate Portal
-- `apps/api` — shared Hono backend
-
-Target shared packages:
-
-- `packages/ui` — shared UI primitives
-- `packages/design-system` — light theme tokens
-- `packages/contracts` — shared schemas and API types
-- `packages/api-client` — typed API client
-- `packages/database` — Drizzle ORM, PostgreSQL schema and migrations
-- `packages/blockchain` — shared blockchain primitives
-- `packages/seed` — deterministic synthetic demo data
-
-See [the migration plan](docs/architecture/monorepo-migration.md).
-
-## Try the API
-
+## PostgreSQL (opt-in)
+Set `DATABASE_URL`, then run:
 ```zsh
-curl http://localhost:3000/chain
-curl http://localhost:3000/chain/verify
-curl http://localhost:3000/api/health
+pnpm db:generate
+pnpm db:migrate
 ```
+The running API still uses the existing SQLite/Turso adapter. The PostgreSQL schema must pass adapter parity and blockchain integrity tests before it can be made authoritative. This is deliberate: migration must not silently switch or lose demo data.
 
-The database defaults to `./data/voting-demo.sqlite` from the repository root when configured manually. The API workspace scripts set `DB_PATH=../../data/voting-demo.sqlite`.
+## Preserved capabilities
+SHA-256 hash-linked blocks, Merkle roots, Ed25519 demo signing, check-in/token workflow, ballot casting, receipts, block/chain verification, district synchronization simulation and tamper demonstration remain in the shared API/legacy admin app.
 
-## Migration principles
+## Security and product limitations
+- Base64 ballot payload representation is **not encryption**.
+- Admin demo credentials are hardcoded in the legacy demonstration UI.
+- The current API issues a demo private key to the browser and accepts it back on cast.
+- District sync is an in-memory simulation, not distributed consensus.
+- The candidate portal deliberately shows no election result totals because the API does not currently publish independently verifiable tallies.
+- No real identities, voter rolls, ballots or election operations should be used.
+- This MVP is not a certified voting system and is unsuitable for real elections.
 
-1. Keep existing API contracts and voting behavior working.
-2. Introduce PostgreSQL and Drizzle behind a storage boundary; do not remove SQLite until parity tests pass.
-3. Keep one shared Hono API and one authoritative database for all portals.
-4. Generate synthetic voter data only. Planned demo dataset: 5,000 voters, 3,250 voted and 1,750 not voted.
-5. Verify seeded transactions, voter statuses, block hashes, Merkle roots and signatures.
-6. Never expose private validator keys or voter-to-ballot links through browser-facing APIs.
+See [the architecture and migration plan](docs/architecture/monorepo-migration.md).

@@ -1,79 +1,45 @@
-# Monorepo migration
+# Monorepo architecture and migration plan
 
-## Workspace layout
-
+## Runtime topology
 ```text
-apps/
-  admin/                 # Existing React/Vite operations UI
-    src/                 # Existing pages and components retained
-    public/models/       # Face detection model assets
-  api/                   # Hono API, blockchain and storage
-    src/
-      blockchain/
-      storage/
-      server.ts
-packages/                # Shared packages to extract in later phases
-api/index.ts             # Vercel adapter for the Hono API
-src/                     # Removed after source migration
+Admin (5173) ─┐
+Voter (5174) ─┤
+Candidate (5175) ─┼── Hono API (3000) ── current SQLite / Turso adapter
+Explorer (5176) ┘
+                  Shared UI · Design tokens · API contracts · API client
+
+Optional: Drizzle schema + PostgreSQL client (not wired into API runtime)
 ```
 
-## Runtime architecture
+## Workspaces
+- `apps/admin`: operations command center. All previous hash routes and pages remain available.
+- `apps/voter`: separate three-stage demo flow using current voter auth and cast endpoints.
+- `apps/candidate`: read-only candidate roster, chain integrity and system status. Does not invent or derive tallies.
+- `apps/explorer`: block list/detail and receipt lookup using the existing chain endpoints.
+- `apps/api`: shared Hono API and current SQLite/Turso adapter.
+- `packages/ui`, `design-system`, `contracts`, `api-client`: shared presentation and typed client boundary.
+- `packages/database`: PostgreSQL Drizzle schema, client and initial migration.
+- `packages/seed`: deterministic synthetic dataset generator for 5,000 records.
 
-- `apps/api` owns the Hono HTTP API, blockchain implementation and current SQLite/Turso storage adapter.
-- `apps/admin` owns the existing React application and runs as an independent Vite app.
-- The Vite development server proxies `/api`, `/chain` and `/demo` to the Hono API on port 3000.
-- The root PNPM workspace and Turborepo coordinate both applications.
-- The existing Vercel API adapter imports the moved Hono app without changing API paths.
+## Data migration boundary
+The existing SQLite/Turso storage adapter remains the runtime source of truth. PostgreSQL/Drizzle is an opt-in schema foundation and must not become authoritative until:
+1. a PostgreSQL storage adapter implements every method in the existing storage interface;
+2. adapter parity tests cover token issuance/spending, block append, tamper/reset and voter state;
+3. chain hashes, signatures and Merkle roots are verified against identical fixtures;
+4. data migration and rollback are tested with backups.
 
-## Target applications
-
-- `apps/admin`: Election Command Center
-- `apps/voter`: Voter Portal
-- `apps/explorer`: Blockchain Explorer
-- `apps/candidate`: Candidate Portal
-- `apps/api`: shared Hono backend
-
-The current frontend routes are preserved in the admin compatibility application for this migration phase. They will be split into role-specific apps after shared API contracts and navigation boundaries are established.
-
-## Target shared packages
-
-- `packages/ui`: shared UI primitives
-- `packages/design-system`: design tokens and themes
-- `packages/contracts`: shared Zod schemas and API types
-- `packages/api-client`: typed API client
-- `packages/database`: Drizzle schema, migrations and PostgreSQL client
-- `packages/blockchain`: shared chain, hashing and Merkle verification logic
-- `packages/seed`: deterministic synthetic demo dataset
-
-## Migration safety
-
-1. Preserve existing API paths and response shapes.
-2. Keep the current SQLite/Turso adapter until a PostgreSQL adapter has parity tests.
-3. Do not rewrite blockchain algorithms during the workspace move.
-4. Use synthetic voter data only.
-5. Do not expose private validator keys or voter-to-ballot links through browser APIs.
-6. Do not describe Base64 ballot encoding as encryption or simulated district sync as distributed consensus.
+## API and security invariants
+- Existing endpoint paths and response shapes remain unchanged.
+- Do not expose private validator keys or voter-to-ballot identity mappings to public portals.
+- Current demo voting still returns a private session key to the client; this is not a production key-custody design.
+- Base64 is encoding, not encryption. District synchronization is simulated, not consensus.
+- Candidate tallies must not be inferred from encrypted ballot payloads or exposed without a separately verified tally pipeline.
 
 ## Commands
-
 ```zsh
-corepack enable
-pnpm install
+pnpm install --no-frozen-lockfile
 pnpm dev
 pnpm build
+pnpm typecheck
 pnpm test
 ```
-
-The API and admin frontend can also be run separately:
-
-```zsh
-pnpm --filter @evoting/api dev
-pnpm --filter @evoting/admin dev
-```
-
-## Next steps
-
-1. Extract reusable UI, API contracts and database interfaces into packages.
-2. Add separate voter, candidate and public explorer applications.
-3. Add Drizzle/PostgreSQL behind the storage interface and run parity tests.
-4. Add a deterministic synthetic 5,000-voter dataset and validate voter counts, chain hashes, Merkle roots and signatures.
