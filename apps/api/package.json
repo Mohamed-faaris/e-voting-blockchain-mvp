@@ -4,18 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "PUBLIC_DIR=../../public tsx watch src/server.ts",
+    "dev": "pnpm --filter @evoting/database build && node --env-file=../../.env --import tsx --watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "PUBLIC_DIR=../../public node dist/server.js",
+    "start": "pnpm --filter @evoting/database build && node --env-file=../../.env dist/server.js",
     "test": "tsx --test src/**/*.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "predev": "pnpm --filter @evoting/database build",
-    "prestart": "pnpm --filter @evoting/database build"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@evoting/database": "workspace:*",
     "@hono/node-server": "^1.13.7",
-    "hono": "^4.6.12"
+    "hono": "^4.6.12",
+    "@libsql/client": "^0.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
