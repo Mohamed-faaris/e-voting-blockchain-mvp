@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.28.2
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -28,5 +28,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
       - name: Build workspaces
         run: pnpm build
+      - name: Type-check workspaces
+        run: pnpm typecheck
       - name: Run tests
         run: pnpm test

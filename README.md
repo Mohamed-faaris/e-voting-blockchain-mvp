@@ -1,67 +1,65 @@
 # Electronic Voting Blockchain MVP
+
 > **Educational demonstration only. Not suitable for conducting real elections.**
 
-This repository is a PNPM + Turborepo monorepo with four independent React portals, a shared Hono API, reusable UI/contracts packages and an optional PostgreSQL/Drizzle database package.
+This is a PNPM + Turborepo monorepo with four independent React portals, one shared Hono API, reusable UI/contracts packages and an opt-in PostgreSQL/Drizzle schema foundation.
 
-## Portal applications
-| App | Local URL | Purpose |
+## Applications
+| Workspace | Local address | Purpose |
 |---|---|---|
-| Admin | http://localhost:5173 | Election operations, all legacy admin routes and system controls |
-| Voter | http://localhost:5174 | Check-in, one-time demo token, ballot casting and receipt |
-| Candidate | http://localhost:5175 | Read-only candidate roster and chain/audit status |
-| Explorer | http://localhost:5176 | Block inspection, Merkle references and receipt lookup |
-| API | http://localhost:3000 | Shared Hono API and persistence |
+| Admin | http://localhost:5173 | Election Command Center; retains every legacy admin route |
+| Voter | http://localhost:5174 | Demo voter check-in, token, ballot and receipt |
+| Candidate | http://localhost:5175 | Read-only candidate roster and audit metadata |
+| Explorer | http://localhost:5176 | Blocks, Merkle roots, chain verification and receipt lookup |
+| API | http://localhost:3000 | Shared Hono endpoints and current persistence layer |
 
 ## Run on Ubuntu / zsh
-Requirements: Node.js 22+, PNPM 10+.
+Requirements: Node.js 22+ and PNPM 10+.
 ```zsh
 corepack enable
-pnpm install --no-frozen-lockfile # refresh workspace importer lockfile on this branch
+pnpm install --no-frozen-lockfile # regenerate the workspace lockfile on this branch
 pnpm dev
 ```
-Build and validate:
+In another terminal, open the portal URLs above. Build and verify:
 ```zsh
 pnpm build
 pnpm typecheck
 pnpm test
 ```
-Run a specific service:
+Run a service separately with `pnpm dev:api`, `pnpm dev:admin`, `pnpm dev:voter`, `pnpm dev:candidate` or `pnpm dev:explorer`.
+
+## PostgreSQL schema (opt-in)
+The active API still uses SQLite/Turso. To inspect and migrate the PostgreSQL schema without switching API storage:
 ```zsh
-pnpm dev:api
-pnpm dev:admin
-pnpm dev:voter
-pnpm dev:candidate
-pnpm dev:explorer
+cp .env.example .env
+docker compose -f infra/postgres/compose.yml up -d
+# DATABASE_URL must be exported in the current shell if it is not loaded by your shell tooling
+export DATABASE_URL='postgres://postgres:postgres@localhost:5432/evoting_demo'
+pnpm db:generate
+pnpm db:migrate
 ```
+The Drizzle package defines voters, blocks, transactions and voting tokens. Do not route production writes to PostgreSQL until a matching storage adapter and parity tests cover token lifecycle, atomic block append, chain hashes, Merkle roots, signatures, tampering and reset/rollback.
 
 ## Workspaces
 - `apps/api`: Hono API, current SQLite/Turso adapter and blockchain demo.
 - `apps/admin`, `apps/voter`, `apps/candidate`, `apps/explorer`: independent Vite/React apps.
-- `packages/ui`: common workspace shell and presentation components.
-- `packages/design-system`: shared light-theme design tokens.
+- `packages/ui`: shared shell, page headers, panels, metric cards, status and loading components.
+- `packages/design-system`: shared light-theme tokens and responsive shell styles.
 - `packages/contracts`: shared API/domain TypeScript contracts.
-- `packages/api-client`: typed fetch client for the current routes.
-- `packages/database`: Drizzle schema and PostgreSQL client/migration; opt-in, not yet wired into runtime storage.
-- `packages/seed`: deterministic synthetic 5,000-voter fixture (3,250 voted / 1,750 not voted).
+- `packages/api-client`: typed fetch client for existing routes.
+- `packages/database`: Drizzle schema, PostgreSQL client and migration.
+- `packages/seed`: deterministic synthetic voter fixture (5,000 records; 3,250 voted and 1,750 not voted).
 
-## PostgreSQL (opt-in)
-Set `DATABASE_URL`, then run:
-```zsh
-pnpm db:generate
-pnpm db:migrate
-```
-The running API still uses the existing SQLite/Turso adapter. The PostgreSQL schema must pass adapter parity and blockchain integrity tests before it can be made authoritative. This is deliberate: migration must not silently switch or lose demo data.
+## Existing capabilities retained
+SHA-256 hash-linked blocks, Merkle roots, Ed25519 demo signing, check-in/token workflow, ballot casting, receipts, block/chain verification, district synchronization simulation and tamper demonstration remain in the shared API and legacy admin app.
 
-## Preserved capabilities
-SHA-256 hash-linked blocks, Merkle roots, Ed25519 demo signing, check-in/token workflow, ballot casting, receipts, block/chain verification, district synchronization simulation and tamper demonstration remain in the shared API/legacy admin app.
-
-## Security and product limitations
+## Important security limitations
 - Base64 ballot payload representation is **not encryption**.
-- Admin demo credentials are hardcoded in the legacy demonstration UI.
-- The current API issues a demo private key to the browser and accepts it back on cast.
-- District sync is an in-memory simulation, not distributed consensus.
-- The candidate portal deliberately shows no election result totals because the API does not currently publish independently verifiable tallies.
-- No real identities, voter rolls, ballots or election operations should be used.
-- This MVP is not a certified voting system and is unsuitable for real elections.
+- The legacy admin page contains hardcoded demonstration credentials.
+- The current API returns a demo private session key to the browser and accepts it back on ballot submission.
+- District synchronization is an in-memory simulation, not distributed consensus.
+- Candidate tallies are not published by the current API; the new candidate portal does not infer totals from ballot payloads.
+- Never use real identities, voter rolls, ballots or election operations.
+- This is not a certified or secure election platform.
 
 See [the architecture and migration plan](docs/architecture/monorepo-migration.md).
