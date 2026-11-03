@@ -53,6 +53,14 @@ export const storage = {
     const rows = await client`SELECT voter_id FROM voting_tokens WHERE token_id = ${tokenId} LIMIT 1`;
     return rows[0]?.voter_id ? String(rows[0].voter_id) : undefined;
   },
+  async appendVoteBlock(block: Block, tokenId: string, voterId?: string): Promise<void> {
+    await client.begin(async (tx) => {
+      await tx`INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json) VALUES (${block.index}, ${block.districtId}, ${new Date(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${tx.json(block)})`;
+      for (const item of block.transactions) await tx`INSERT INTO transactions (id, block_index, token_id, district_id, payload_json) VALUES (${item.id}, ${block.index}, ${item.tokenId}, ${item.districtId}, ${tx.json(item)})`;
+      await tx`UPDATE voting_tokens SET status = 'SPENT', spent_at = NOW() WHERE token_id = ${tokenId}`;
+      if (voterId) await tx`UPDATE voters SET has_voted = TRUE WHERE voter_id = ${voterId}`;
+    });
+  },
   async saveBlock(block: Block): Promise<void> {
     await client.begin(async (tx) => {
       await tx`INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
@@ -124,8 +132,12 @@ export async function appendDemoTransaction(input: { districtId: string; tokenId
   const last = chain[chain.length - 1]!;
   const tx = createTransaction(input);
   const block = createBlock(last.index + 1, input.districtId, [tx], last.hash);
-  await storage.saveBlock(block);
-  await storage.markTokenSpent(input.tokenId, voterId);
+  try {
+    await storage.appendVoteBlock(block, input.tokenId, voterId);
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") throw new Error("TOKEN_ALREADY_USED");
+    throw error;
+  }
   return block;
 }
 export async function checkChain(): Promise<{ valid: boolean; errors: string[]; blockCount: number }> {
