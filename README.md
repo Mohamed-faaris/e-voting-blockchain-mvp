@@ -20,7 +20,7 @@ corepack enable
 pnpm install --no-frozen-lockfile # regenerate the workspace lockfile on this branch
 pnpm dev
 ```
-In another terminal, open the portal URLs above. Build and verify:
+Build and verify:
 ```zsh
 pnpm build
 pnpm typecheck
@@ -29,13 +29,11 @@ pnpm test
 Run a service separately with `pnpm dev:api`, `pnpm dev:admin`, `pnpm dev:voter`, `pnpm dev:candidate` or `pnpm dev:explorer`.
 
 ## PostgreSQL schema (opt-in)
-The active API still uses SQLite/Turso. To inspect and migrate the PostgreSQL schema without switching API storage:
+The active API still uses SQLite/Turso. To apply the tracked PostgreSQL schema without switching API storage:
 ```zsh
 cp .env.example .env
 docker compose -f infra/postgres/compose.yml up -d
-# DATABASE_URL must be exported in the current shell if it is not loaded by your shell tooling
 export DATABASE_URL='postgres://postgres:postgres@localhost:5432/evoting_demo'
-pnpm db:generate
 pnpm db:migrate
 ```
 The Drizzle package defines voters, blocks, transactions and voting tokens. Do not route production writes to PostgreSQL until a matching storage adapter and parity tests cover token lifecycle, atomic block append, chain hashes, Merkle roots, signatures, tampering and reset/rollback.
