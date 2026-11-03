@@ -1,0 +1,31 @@
+{
+  "name": "@evoting/database",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./schema": "./dist/schema.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test src/*.test.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file=../../.env --import tsx src/migrate.ts",
+    "db:seed": "node --env-file=../../.env --import tsx src/seed.ts",
+    "db:reset": "node --env-file=../../.env --import tsx src/reset.ts",
+    "db:verify": "node --env-file=../../.env --import tsx src/verify.ts",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.7",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "drizzle-kit": "^0.31.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

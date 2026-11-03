@@ -1,37 +1,38 @@
 {
   "name": "e-voting-blockchain-mvp",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js",
-    "test": "tsx --test src/**/*.test.ts"
-  },
-  "dependencies": {
-    "@hono/node-server": "^1.13.7",
-    "@libsql/client": "^0.18.0",
-    "@tailwindcss/vite": "^4.3.3",
-    "@vercel/node": "^27.0.2",
-    "@vladmandic/face-api": "^1.7.15",
-    "clsx": "^2.1.1",
-    "hono": "^4.6.12",
-    "lucide-react": "^1.61.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "tailwind-merge": "^3.7.0"
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "start": "pnpm --filter @evoting/api start",
+    "dev:api": "pnpm --filter @evoting/api dev",
+    "dev:admin": "pnpm --filter @evoting/admin dev",
+    "dev:voter": "pnpm --filter @evoting/voter dev",
+    "dev:candidate": "pnpm --filter @evoting/candidate dev",
+    "dev:explorer": "pnpm --filter @evoting/explorer dev",
+    "db:generate": "pnpm --filter @evoting/database db:generate",
+    "db:migrate": "pnpm --filter @evoting/database db:migrate",
+    "db:seed": "pnpm db:migrate && pnpm --filter @evoting/database db:seed",
+    "db:reset": "pnpm db:migrate && pnpm --filter @evoting/database db:reset",
+    "db:verify": "pnpm --filter @evoting/database db:verify",
+    "db:studio": "pnpm --filter @evoting/database db:studio",
+    "dev:legacy": "pnpm --filter @evoting/api dev",
+    "build:legacy": "pnpm --filter @evoting/api build",
+    "test:legacy": "pnpm --filter @evoting/api test",
+    "typecheck:legacy": "pnpm --filter @evoting/api typecheck"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.2",
-    "autoprefixer": "^10.6.1",
-    "postcss": "^8.5.31",
-    "tailwindcss": "^4.3.3",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vite": "^8.3.5"
+    "turbo": "^2.5.6"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7"
   }
 }
