@@ -19,7 +19,7 @@ This repository uses a PNPM + Turborepo monorepo. The existing React UI and Hono
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22+ (the storage adapter uses `node:sqlite`)
 - PNPM 10+
 
 ## Run on Ubuntu / zsh
