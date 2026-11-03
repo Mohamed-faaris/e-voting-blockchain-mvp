@@ -1,0 +1,13 @@
+{
+  "name": "@evoting/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cd ../.. && pnpm run dev:legacy",
+    "build": "cd ../.. && pnpm run build:legacy",
+    "start": "cd ../.. && pnpm start",
+    "test": "cd ../.. && pnpm run test:legacy",
+    "typecheck": "cd ../.. && pnpm run typecheck:legacy"
+  }
+}
