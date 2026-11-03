@@ -1,4 +1,5 @@
 import { createDatabase, voters } from "@evoting/database";
+import { sql } from "drizzle-orm";
 import { createDefaultDemoVoters } from "@evoting/seed";
 
 const { db, client } = createDatabase();
@@ -14,7 +15,10 @@ try {
   }))).onConflictDoUpdate({
     target: voters.voterId,
     set: {
-      name: undefined,
+      name: sql`excluded.name`,
+      districtId: sql`excluded.district_id`,
+      hasVoted: sql`excluded.has_voted`,
+      issuedTokenId: null
     }
   });
   const [{ count }] = await client`SELECT COUNT(*)::int AS count FROM voters WHERE voter_id LIKE 'DEMO-%'`;
