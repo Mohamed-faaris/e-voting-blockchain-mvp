@@ -43,7 +43,7 @@ app.use("*", cors({
 // Track boot time
 const serverStartTime = Date.now();
 
-// Initialize Database (Turso or local)
+// Initialize PostgreSQL storage
 await initStorage();
 
 // Detailed Real Telemetry & Stats Endpoint
