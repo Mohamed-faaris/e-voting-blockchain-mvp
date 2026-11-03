@@ -1,7 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Hono } from "hono";
-import { cors } from "hono/cors";
 import {
   initStorage,
   appendDemoTransaction,
@@ -25,20 +24,6 @@ import {
 
 const app = new Hono();
 const publicDir = resolve(process.env.PUBLIC_DIR ?? "./public");
-const localPortalOrigins = [5173, 5174, 5175, 5176].flatMap((port) => [
-  `http://localhost:${port}`,
-  `http://127.0.0.1:${port}`
-]);
-const allowedOrigins = new Set([
-  ...localPortalOrigins,
-  ...(process.env.ALLOWED_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean)
-]);
-app.use("*", cors({
-  origin: (origin) => allowedOrigins.has(origin) ? origin : undefined,
-  allowMethods: ["GET", "POST", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization"],
-  maxAge: 600
-}));
 
 // Track boot time
 const serverStartTime = Date.now();

@@ -18,7 +18,6 @@ Requirements: Node.js 22+ and PNPM 10+.
 ```zsh
 corepack enable
 pnpm install --no-frozen-lockfile # regenerate the workspace lockfile on this branch
-cp .env.example .env
 pnpm dev
 ```
 Build and verify:
@@ -28,13 +27,6 @@ pnpm typecheck
 pnpm test
 ```
 Run a service separately with `pnpm dev:api`, `pnpm dev:admin`, `pnpm dev:voter`, `pnpm dev:candidate` or `pnpm dev:explorer`.
-
-## Deployment model
-The existing root Vercel project remains the API/legacy compatibility deployment. Deploy the four Vite apps as separate Vercel projects from this same repository, using each workspace as its project root: `apps/admin`, `apps/voter`, `apps/candidate` and `apps/explorer`. Keep workspace files available to the build (the workspace packages live outside each app directory). For each frontend deployment, configure:
-- `VITE_API_BASE_URL`: absolute origin of the deployed Hono API, e.g. `https://api.example.com`.
-- The other `VITE_*_URL` portal variables: deployed URLs for the other three frontends.
-
-On the API deployment, set `ALLOWED_ORIGINS` to a comma-separated list of the four frontend origins. Local development already allows ports 5173–5176. Do not set a wildcard origin when enabling voting POST requests.
 
 ## PostgreSQL schema (opt-in)
 The active API still uses SQLite/Turso. To apply the tracked PostgreSQL schema without switching API storage:
@@ -52,7 +44,7 @@ The Drizzle package defines voters, blocks, transactions and voting tokens. Do n
 - `packages/ui`: shared shell, page headers, panels, metric cards, status and loading components.
 - `packages/design-system`: shared light-theme tokens and responsive shell styles.
 - `packages/contracts`: shared API/domain TypeScript contracts.
-- `packages/api-client`: typed fetch client for existing routes; supports cross-origin API base configuration.
+- `packages/api-client`: typed fetch client for existing routes.
 - `packages/database`: Drizzle schema, PostgreSQL client and migration.
 - `packages/seed`: deterministic synthetic voter fixture (5,000 records; 3,250 voted and 1,750 not voted).
 
