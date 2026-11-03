@@ -8,7 +8,9 @@
     "build": "tsc -p tsconfig.json",
     "start": "PUBLIC_DIR=../../public node dist/server.js",
     "test": "tsx --test src/**/*.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "predev": "pnpm --filter @evoting/database build",
+    "prestart": "pnpm --filter @evoting/database build"
   },
   "dependencies": {
     "@evoting/database": "workspace:*",
