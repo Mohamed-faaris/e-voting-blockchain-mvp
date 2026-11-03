@@ -2,7 +2,7 @@
 
 > **Educational demonstration only. Not suitable for conducting real elections.**
 
-This is a PNPM + Turborepo monorepo with four independent React portals, one shared Hono API, reusable UI/contracts packages and an opt-in PostgreSQL/Drizzle schema foundation.
+This is a PNPM + Turborepo monorepo with four independent React portals, one shared Hono API, reusable UI/contracts packages and PostgreSQL persistence through Drizzle.
 
 ## Applications
 | Workspace | Local address | Purpose |
@@ -19,6 +19,9 @@ Requirements: Node.js 22+ and PNPM 10+.
 corepack enable
 pnpm install --no-frozen-lockfile # regenerate the workspace lockfile on this branch
 cp .env.example .env
+docker compose up -d postgres
+pnpm db:migrate
+pnpm db:seed
 pnpm dev
 ```
 Build and verify:
@@ -36,15 +39,27 @@ The existing root Vercel project remains the API/legacy compatibility deployment
 
 On the API deployment, set `ALLOWED_ORIGINS` to a comma-separated list of the four frontend origins. Local development already allows ports 5173–5176. Do not set a wildcard origin when enabling voting POST requests.
 
-## PostgreSQL schema (opt-in)
-The active API still uses SQLite/Turso. To apply the tracked PostgreSQL schema without switching API storage:
+## PostgreSQL database and deterministic seed
+
+The API uses PostgreSQL through the `@evoting/database` Drizzle package. SQLite/Turso remains only as legacy compatibility/test code; it is no longer selected by the API runtime.
+
 ```zsh
 cp .env.example .env
-docker compose -f infra/postgres/compose.yml up -d
-export DATABASE_URL='postgres://postgres:postgres@localhost:5432/evoting_demo'
+docker compose up -d postgres
 pnpm db:migrate
+pnpm db:seed
+pnpm dev
 ```
-The Drizzle package defines voters, blocks, transactions and voting tokens. Do not route production writes to PostgreSQL until a matching storage adapter and parity tests cover token lifecycle, atomic block append, chain hashes, Merkle roots, signatures, tampering and reset/rollback.
+
+The seed is repeatable and only upserts the `DEMO-00001` … `DEMO-05000` voter namespace. It creates 5,000 synthetic voters: 3,250 marked voted and 1,750 not voted. It does not create real voter identities or ballot records.
+
+Useful commands:
+- `pnpm db:migrate`: create/update PostgreSQL tables and indexes.
+- `pnpm db:seed`: upsert deterministic demo voters.
+- `pnpm db:studio`: open Drizzle Studio.
+- `pnpm db:generate`: generate Drizzle migration files from schema changes.
+
+The local Docker credentials are for development only. Use a managed PostgreSQL provider such as Neon for hosted deployments and set `DATABASE_URL` only on the API server.
 
 ## Workspaces
 - `apps/api`: Hono API, current SQLite/Turso adapter and blockchain demo.
