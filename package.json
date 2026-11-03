@@ -1,1 +1,36 @@
-{"name":"e-voting-blockchain-mvp","version":"0.3.0","private":true,"type":"module","packageManager":"pnpm@10.28.2","scripts":{"dev":"turbo run dev --parallel","build":"turbo run build","test":"turbo run test","typecheck":"turbo run typecheck","start":"pnpm --filter @evoting/api start","dev:api":"pnpm --filter @evoting/api dev","dev:admin":"pnpm --filter @evoting/admin dev","dev:voter":"pnpm --filter @evoting/voter dev","dev:candidate":"pnpm --filter @evoting/candidate dev","dev:explorer":"pnpm --filter @evoting/explorer dev","db:generate":"pnpm --filter @evoting/database db:generate","db:migrate":"pnpm --filter @evoting/database db:migrate","dev:legacy":"pnpm --filter @evoting/api dev","build:legacy":"pnpm --filter @evoting/api build","test:legacy":"pnpm --filter @evoting/api test","typecheck:legacy":"pnpm --filter @evoting/api typecheck"},"devDependencies":{"turbo":"^2.5.6"},"engines":{"node":">=22"},"dependencies":{"@hono/node-server":"^1.13.7"}}
+{
+  "name": "e-voting-blockchain-mvp",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "start": "pnpm --filter @evoting/api start",
+    "dev:api": "pnpm --filter @evoting/api dev",
+    "dev:admin": "pnpm --filter @evoting/admin dev",
+    "dev:voter": "pnpm --filter @evoting/voter dev",
+    "dev:candidate": "pnpm --filter @evoting/candidate dev",
+    "dev:explorer": "pnpm --filter @evoting/explorer dev",
+    "db:generate": "pnpm --filter @evoting/database db:generate",
+    "db:migrate": "pnpm --filter @evoting/database db:migrate",
+    "dev:legacy": "pnpm --filter @evoting/api dev",
+    "build:legacy": "pnpm --filter @evoting/api build",
+    "test:legacy": "pnpm --filter @evoting/api test",
+    "typecheck:legacy": "pnpm --filter @evoting/api typecheck",
+    "db:seed": "pnpm --filter @evoting/database db:seed",
+    "db:studio": "pnpm --filter @evoting/database db:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.6"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7"
+  }
+}
