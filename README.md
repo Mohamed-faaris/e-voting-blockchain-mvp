@@ -26,7 +26,7 @@ This repository uses a PNPM + Turborepo monorepo. The existing React UI and Hono
 
 ```zsh
 corepack enable
-pnpm install
+pnpm install --no-frozen-lockfile  # refreshes workspace lockfile on this migration branch
 
 # Start API and admin frontend together
 pnpm dev
