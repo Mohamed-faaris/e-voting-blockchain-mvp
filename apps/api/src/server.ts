@@ -23,6 +23,7 @@ import {
 } from "./blockchain/sync.js";
 
 const app = new Hono();
+const publicDir = resolve(process.env.PUBLIC_DIR ?? "./public");
 
 // Track boot time
 const serverStartTime = Date.now();
@@ -302,7 +303,7 @@ app.post("/api/demo/reset", async (c) => {
 // Serve frontend assets and SPA fallback
 app.get("/assets/*", (c) => {
   const assetPath = c.req.path.replace(/^\/assets\//, "");
-  const filePath = resolve("./public/assets", assetPath);
+  const filePath = resolve(publicDir, "assets", assetPath);
   if (existsSync(filePath)) {
     const content = readFileSync(filePath);
     const contentType = filePath.endsWith(".js")
@@ -316,7 +317,7 @@ app.get("/assets/*", (c) => {
 });
 
 app.get("/*", (c) => {
-  const indexPath = resolve("./public/index.html");
+  const indexPath = resolve(publicDir, "index.html");
   if (existsSync(indexPath)) {
     return c.html(readFileSync(indexPath, "utf-8"));
   }

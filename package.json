@@ -6,38 +6,15 @@
   "packageManager": "pnpm@10.28.2",
   "scripts": {
     "dev": "turbo run dev --parallel",
-    "dev:legacy": "tsx watch src/server.ts",
     "build": "turbo run build",
-    "build:legacy": "tsc -p tsconfig.json",
-    "start": "node dist/server.js",
     "test": "turbo run test",
-    "test:legacy": "tsx --test src/**/*.test.ts",
-    "typecheck:legacy": "tsc --noEmit -p tsconfig.json"
-  },
-  "dependencies": {
-    "@hono/node-server": "^1.13.7",
-    "@libsql/client": "^0.18.0",
-    "@tailwindcss/vite": "^4.3.3",
-    "@vercel/node": "^27.0.2",
-    "@vladmandic/face-api": "^1.7.15",
-    "clsx": "^2.1.1",
-    "hono": "^4.6.12",
-    "lucide-react": "^1.61.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "tailwind-merge": "^3.7.0"
+    "start": "pnpm --filter @evoting/api start",
+    "dev:legacy": "pnpm --filter @evoting/api dev",
+    "build:legacy": "pnpm --filter @evoting/api build",
+    "test:legacy": "pnpm --filter @evoting/api test",
+    "typecheck:legacy": "pnpm --filter @evoting/api typecheck"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.2",
-    "autoprefixer": "^10.6.1",
-    "postcss": "^8.5.31",
-    "tailwindcss": "^4.3.3",
-    "tsx": "^4.19.2",
-    "turbo": "^2.5.6",
-    "typescript": "^5.7.2",
-    "vite": "^8.3.5"
+    "turbo": "^2.5.6"
   }
 }

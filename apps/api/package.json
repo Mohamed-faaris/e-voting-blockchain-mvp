@@ -1,13 +1,23 @@
 {
   "name": "@evoting/api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "cd ../.. && pnpm run dev:legacy",
-    "build": "cd ../.. && pnpm run build:legacy",
-    "start": "cd ../.. && pnpm start",
-    "test": "cd ../.. && pnpm run test:legacy",
-    "typecheck": "cd ../.. && pnpm run typecheck:legacy"
+    "dev": "DB_PATH=../../data/voting-demo.sqlite PUBLIC_DIR=../../public tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "DB_PATH=../../data/voting-demo.sqlite PUBLIC_DIR=../../public node dist/server.js",
+    "test": "tsx --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@libsql/client": "^0.18.0",
+    "hono": "^4.6.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
   }
 }
