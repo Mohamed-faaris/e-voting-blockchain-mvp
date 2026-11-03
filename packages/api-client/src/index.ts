@@ -1,5 +1,5 @@
 import type { Block,Candidate,ReceiptLookup,SystemStats,Voter,VoterAuthResponse,VoteReceipt } from "@evoting/contracts";
-const API_BASE = (globalThis as typeof globalThis & {__EVOTING_API_BASE__?:string}).__EVOTING_API_BASE__ ?? "";
+const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/,"") ?? "";
 export class ApiError extends Error { constructor(message:string,public readonly status:number){super(message);this.name="ApiError";} }
 async function request<T>(path:string,init?:RequestInit):Promise<T>{
  const response=await fetch(API_BASE+path,{...init,headers:{...(init?.body?{"Content-Type":"application/json"}:{}),...init?.headers}});

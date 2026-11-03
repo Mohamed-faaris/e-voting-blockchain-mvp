@@ -21,8 +21,14 @@ Optional: Drizzle schema + PostgreSQL client (not wired into API runtime)
 - `packages/database`: PostgreSQL Drizzle schema, client and initial migration.
 - `packages/seed`: deterministic synthetic dataset generator for 5,000 records.
 
+## Frontend/API connectivity
+- In development, each Vite app proxies API and chain paths to port 3000.
+- For separate deployments, set `VITE_API_BASE_URL` at frontend build time to the API origin.
+- Set `ALLOWED_ORIGINS` on the API to the four deployed frontend origins. Local ports 5173–5176 are allowed by default.
+- The CORS allowlist is explicit; do not use a wildcard for a demo API that accepts voting POST requests.
+
 ## Data migration boundary
-The existing SQLite/Turso storage adapter remains the runtime source of truth. PostgreSQL/Drizzle is an opt-in schema foundation and must not become authoritative until:
+The existing SQLite/Turso storage adapter remains the runtime source of truth. PostgreSQL/Drizzle must not become authoritative until:
 1. a PostgreSQL storage adapter implements every method in the existing storage interface;
 2. adapter parity tests cover token issuance/spending, block append, tamper/reset and voter state;
 3. chain hashes, signatures and Merkle roots are verified against identical fixtures;
