@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema.ts"
+    ".": "./dist/index.js",
+    "./schema": "./dist/schema.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -17,8 +17,7 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.44.7",
-    "postgres": "^3.4.7",
-    "@evoting/seed": "workspace:*"
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
