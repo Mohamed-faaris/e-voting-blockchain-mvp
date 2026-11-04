@@ -471,10 +471,10 @@ def oak_mjpeg_generator():
         try:
             encoded = depthai_server_get("/streams/rgb.jpg", timeout=3.0)
             yield (
-                b"--frame\\r\\nContent-Type: image/jpeg\\r\\n"
-                b"Cache-Control: no-store\\r\\n\\r\\n"
+                b"--frame\r\nContent-Type: image/jpeg\r\n"
+                b"Cache-Control: no-store\r\n\r\n"
                 + encoded
-                + b"\\r\\n"
+                + b"\r\n"
             )
         except RuntimeError as exc:
             logger_error = str(exc).encode("utf-8", errors="replace")[:180]
@@ -486,9 +486,9 @@ def oak_mjpeg_generator():
             ok, image = cv2.imencode(".jpg", error_frame)
             if ok:
                 yield (
-                    b"--frame\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n"
+                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
                     + image.tobytes()
-                    + b"\\r\\n"
+                    + b"\r\n"
                 )
             return
 
