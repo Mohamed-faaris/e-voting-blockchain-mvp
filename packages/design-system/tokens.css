@@ -95,7 +95,6 @@ a { color: inherit; }
 .ev-nav-link.active {
   background: #e9ded7;
   color: var(--ev-primary-strong);
-  box-shadow: inset 2px 0 var(--ev-primary);
 }
 .ev-sidebar-foot {
   margin-top: auto;
