@@ -15,6 +15,7 @@ This is a prototype feature, not certified biometric authentication or a product
 ## Requirements
 
 - Python 3.10+
+- [uv](https://docs.astral.sh/uv/) for dependency and environment management.
 - OAK-D Lite bridge running for stereo depth checks.
 - Existing bridge outputs:
   - RGB camera: `/dev/video10` (OAK RGB Bridge)
@@ -27,14 +28,12 @@ From the repository root:
 
 ```bash
 cd services/face-verification
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python download_models.py
-uvicorn app:app --host 127.0.0.1 --port 8765
+uv sync
+uv run python download_models.py
+uv run uvicorn app:app --host 127.0.0.1 --port 8765
 ```
 
-The service binds to loopback only. Keep it on the booth machine. The model downloader fetches the OpenCV Zoo YuNet and SFace ONNX models into `models/`; model files are intentionally not committed. The default local data directory is owner-only (`0700`) and the SQLite file is owner-only (`0600`) where supported.
+The service binds to loopback only. Keep it on the booth machine. Dependencies are declared in `pyproject.toml`; run `uv sync` to create/update `.venv` and generate `uv.lock`. Commit `uv.lock` so booth installations use a reproducible dependency resolution. Run commands through `uv run` rather than activating the environment manually. The model downloader fetches the OpenCV Zoo YuNet and SFace ONNX models into `models/`; model files are intentionally not committed. The default local data directory is owner-only (`0700`) and the SQLite file is owner-only (`0600`) where supported.
 
 ## Frontend workflow
 
