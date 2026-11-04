@@ -63,7 +63,7 @@ a,button{border:1px solid #365071;background:#1a2b43;color:var(--text);border-ra
 <body><main>
 <header class="top"><div><h1>Civic Ledger · Face Service</h1><div class="sub">Local camera, face recognition and direct OAK-D Lite DepthAI dashboard</div></div><div class="pill" id="overall">Checking service…</div></header>
 <section class="grid">
-<div class="panel"><h2>Live OAK RGB · Face detection</h2><div class="video"><img id="stream" src="/camera/oak/stream.mjpg" alt="OAK RGB live stream with face bounding boxes" onerror="this.style.display='none';document.getElementById('streamError').hidden=false"><div id="streamError" class="sub" hidden>Stream unavailable. Check the OAK-D Lite USB connection and DepthAI status.</div></div><div class="hint">YuNet draws face bounding boxes. When a template is enrolled, SFace labels faces ENROLLED or UNKNOWN. This preview is not liveness proof.</div><div class="actions"><button onclick="reloadStream()">Reconnect stream</button><a href="/camera/oak/snapshot" target="_blank" rel="noreferrer">Open snapshot</a><a href="/docs" target="_blank" rel="noreferrer">API docs</a></div></div>
+<div class="panel"><h2>Live OAK RGB · Face detection</h2><div class="video"><img id="stream" src="/camera/oak/stream.mjpg" alt="OAK RGB live stream with face bounding boxes" onerror="this.style.display='none';document.getElementById('streamError').hidden=false"><div id="streamError" class="sub" hidden>Stream unavailable. Check the OAK-D Lite USB connection and DepthAI status.</div></div><div class="hint">The browser runs Tiny Face Detector JavaScript and draws face boxes over the raw OAK stream. This preview is not liveness proof.</div><div class="actions"><button onclick="reloadStream()">Reconnect stream</button><a href="/camera/oak/snapshot" target="_blank" rel="noreferrer">Open snapshot</a><a href="/docs" target="_blank" rel="noreferrer">API docs</a></div></div>
 <div class="panel"><h2>Service status</h2><div class="metrics">
 <div class="metric"><span>FastAPI</span><strong id="apiStatus">Checking…</strong></div>
 <div class="metric"><span>Face models</span><strong id="modelStatus">Checking…</strong></div>
@@ -362,60 +362,6 @@ def delete_enrollment():
     return {"success": True, "registered": False, "message": "Local face template deleted."}
 
 
-def annotated_oak_frame(frame: np.ndarray) -> np.ndarray:
-    """Draw face boxes and SFace labels over a frame received from DepthAI."""
-    height, width = frame.shape[:2]
-    detector, recognizer = models()
-    detector.setInputSize((width, height))
-    _, faces = detector.detect(frame)
-    if faces is None or len(faces) == 0:
-        cv2.putText(
-            frame,
-            "NO FACE DETECTED",
-            (16, 32),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.75,
-            (0, 165, 255),
-            2,
-        )
-        return frame
-
-    enrolled = None
-    if template_status():
-        with closing(sqlite3.connect(DB_PATH)) as connection:
-            row = connection.execute("SELECT embedding FROM face_template WHERE id = 1").fetchone()
-        if row:
-            enrolled = np.frombuffer(row[0], dtype="<f4").astype(np.float32)
-
-    for face in faces:
-        x, y, box_w, box_h = [int(round(value)) for value in face[:4]]
-        x1, y1 = max(0, x), max(0, y)
-        x2, y2 = min(width, x + box_w), min(height, y + box_h)
-        label = "FACE DETECTED"
-        color = (0, 200, 255)
-        if enrolled is not None:
-            aligned = recognizer.alignCrop(frame, face)
-            feature = recognizer.feature(aligned).astype(np.float32).reshape(-1)
-            norm = float(np.linalg.norm(feature))
-            if norm > 0:
-                feature /= norm
-                score = float(np.dot(feature, enrolled) / max(float(np.linalg.norm(enrolled)), 1e-8))
-                matched = score >= FACE_MATCH_THRESHOLD
-                label = f"{'ENROLLED' if matched else 'UNKNOWN'} {score:.2f}"
-                color = (0, 200, 0) if matched else (0, 0, 255)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-        cv2.putText(
-            frame,
-            label,
-            (x1, max(22, y1 - 9)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            color,
-            2,
-        )
-    return frame
-
-
 def oak_device_status():
     status = OAK_CAMERA.status(probe=True)
     error = status.get("error")
@@ -450,7 +396,7 @@ def oak_camera_status():
 def oak_camera_snapshot():
     try:
         frame, _depth, _sequence = OAK_CAMERA.get_frame_pair(timeout=3.0)
-        ok, encoded = cv2.imencode(".jpg", annotated_oak_frame(frame))
+        ok, encoded = cv2.imencode(".jpg", frame)
         if not ok:
             raise HTTPException(status_code=500, detail="Could not encode OAK camera frame.")
         return Response(
@@ -473,22 +419,10 @@ def oak_mjpeg_generator():
                 timeout=4.0,
                 after_sequence=sequence,
             )
-            try:
-                annotated = annotated_oak_frame(frame)
-            except Exception as exc:
-                annotated = frame
-                cv2.putText(
-                    annotated,
-                    f"FACE ANALYSIS ERROR: {str(exc)[:70]}",
-                    (12, 28),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.48,
-                    (0, 0, 255),
-                    2,
-                )
+            # Send a clean RGB frame. Face boxes are rendered by browser JavaScript.
             ok, encoded = cv2.imencode(
                 ".jpg",
-                annotated,
+                frame,
                 [cv2.IMWRITE_JPEG_QUALITY, 80],
             )
             if not ok:
