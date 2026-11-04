@@ -96,7 +96,7 @@ export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void 
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : "Could not start selected camera.");
     }
-  }, [deviceId, stopCamera]);
+  }, [deviceId, refreshCameras, stopCamera]);
 
   useEffect(() => {
     void refreshStatus();
