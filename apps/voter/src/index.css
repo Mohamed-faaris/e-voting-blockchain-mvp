@@ -15,3 +15,81 @@
   border-color: #d9bdb0;
   font-weight: 650;
 }
+
+.voter-demo-roster {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid var(--ev-border);
+  border-radius: 12px;
+  background: var(--ev-surface);
+}
+.voter-demo-roster-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.voter-demo-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ev-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+.voter-demo-roster-heading p {
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+.voter-demo-list {
+  display: grid;
+  gap: 7px;
+}
+.voter-demo-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ev-border);
+  border-radius: 9px;
+  background: var(--ev-background);
+  color: var(--ev-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.voter-demo-account:hover,
+.voter-demo-account.selected {
+  border-color: var(--ev-primary);
+  background: var(--ev-primary-soft);
+}
+.voter-demo-account-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.voter-demo-account-main strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voter-demo-account-main small {
+  color: var(--ev-muted);
+  font-size: 10px;
+}
+.voter-demo-account-status {
+  flex: 0 0 auto;
+  color: var(--ev-success);
+  font-size: 10px;
+  font-weight: 600;
+}
+@media (max-width: 520px) {
+  .voter-demo-roster-heading { align-items: flex-start; }
+  .voter-demo-account { align-items: flex-start; }
+}
