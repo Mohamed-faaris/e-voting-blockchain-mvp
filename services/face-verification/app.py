@@ -494,10 +494,10 @@ def oak_mjpeg_generator():
             if not ok:
                 continue
             yield (
-                b"--frame\r\\nContent-Type: image/jpeg\r\\n"
-                b"Cache-Control: no-store\r\\n\r\\n"
+                b"--frame\r\nContent-Type: image/jpeg\r\n"
+                b"Cache-Control: no-store\r\n\r\n"
                 + encoded.tobytes()
-                + b"\r\\n"
+                + b"\r\n"
             )
         except OakCameraError as exc:
             error_frame = np.zeros((240, 640, 3), dtype=np.uint8)
@@ -513,10 +513,10 @@ def oak_mjpeg_generator():
             ok, encoded = cv2.imencode(".jpg", error_frame)
             if ok:
                 yield (
-                    b"--frame\r\\nContent-Type: image/jpeg\r\\n"
-                    b"Cache-Control: no-store\r\\n\r\\n"
+                    b"--frame\r\nContent-Type: image/jpeg\r\n"
+                    b"Cache-Control: no-store\r\n\r\n"
                     + encoded.tobytes()
-                    + b"\r\\n"
+                    + b"\r\n"
                 )
             break
 
