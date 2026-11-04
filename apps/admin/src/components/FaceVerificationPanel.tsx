@@ -118,11 +118,11 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   }, [refreshStatus, stopCamera]);
 
   useEffect(() => {
-    if (enabled && cameraSource === "webcam") void refreshCameras();
+    if (enabled && isWebcam) void refreshCameras();
   }, [enabled, cameraSource, refreshCameras]);
 
   const capturePayload = () => {
-    if (cameraSource === "oak") {
+    if (isOakCamera) {
       if (!cameraReady || !oakPreviewActive) throw new Error("Start the OAK-D Lite DepthAI stream first.");
       // The Python service captures the OAK RGB/depth pair directly from DepthAI.
       return { camera_source: "oak" as const };
@@ -171,7 +171,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
       const response = await fetch(`${API}/face/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...capturePayload(), check_depth: cameraSource === "oak" })
+        body: JSON.stringify({ ...capturePayload(), check_depth: isOakCamera })
       });
       const data = await parseResponse<FaceResult>(response);
       setResult(data);
@@ -221,8 +221,10 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   };
 
   const selectedCamera = devices.find((device) => device.deviceId === deviceId);
-  const sourceCameraAvailable = cameraSource === "oak" || devices.some((device) => device.source === "webcam");
+  const sourceCameraAvailable = isOakCamera || devices.some((device) => device.source === "webcam");
   const showCameraControls = enabled || status?.registered === false;
+  const isOakCamera = isOakCamera;
+  const isWebcam = !isOakCamera;
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
@@ -264,7 +266,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
                   <option value="oak">OAK-D Lite (DepthAI direct RGB + stereo depth)</option>
                 </select>
               </label>
-              {cameraSource === "webcam" && <label className="block space-y-1 text-xs font-semibold text-slate-700">
+              {isWebcam && <label className="block space-y-1 text-xs font-semibold text-slate-700">
                 Video device
                 <select className="w-full rounded-lg border border-slate-300 bg-white p-2.5" value={deviceId} onChange={(event) => {
                   setDeviceId(event.target.value);
@@ -274,26 +276,26 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
                 </select>
               </label>}
               <div className="flex gap-2">
-                {cameraSource === "webcam" && <button type="button" onClick={() => void refreshCameras()} className="ev-button secondary flex-1"><RefreshCw size={14} /> Refresh devices</button>}
+                {isWebcam && <button type="button" onClick={() => void refreshCameras()} className="ev-button secondary flex-1"><RefreshCw size={14} /> Refresh devices</button>}
                 <button type="button" disabled={!sourceCameraAvailable} onClick={() => void startCamera()} className="ev-button flex-1 disabled:opacity-50"><Video size={14} /> Start camera</button>
               </div>
               <p className="text-[11px] text-slate-500">
-                {cameraSource === "oak" ? "OAK-D Lite selected. The Python service connects directly through the DepthAI SDK and captures synchronized RGB + aligned stereo depth. No browser camera device or bridge is used." : "Standard webcam selected. Face matching works, but stereo-depth checks are unavailable."}
+                {isOakCamera ? "OAK-D Lite selected. The Python service connects directly through the DepthAI SDK and captures synchronized RGB + aligned stereo depth. No browser camera device or bridge is used." : "Standard webcam selected. Face matching works, but stereo-depth checks are unavailable."}
               </p>
               {!sourceCameraAvailable && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
-                  No {cameraSource === "oak" ? "OAK-D Lite camera" : "webcam"} device is available. Select an available camera or connect the device before starting.
+                  No {isOakCamera ? "OAK-D Lite camera" : "webcam"} device is available. Select an available camera or connect the device before starting.
                 </p>
               )}
             </div>
             <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-lg border border-slate-300 bg-slate-950">
-              {cameraSource === "oak" ? (
+              {isOakCamera ? (
                 oakPreviewActive && <img src={`${API}/camera/oak/stream.mjpg`} alt="OAK-D Lite DepthAI RGB stream" className="h-full max-h-64 w-full object-contain" />
               ) : (
                 <video ref={videoRef} muted playsInline className="h-full max-h-64 w-full object-cover" />
               )}
               {!cameraReady && <div className="absolute px-4 text-center text-xs text-slate-300">Start a camera to preview the registration/verification frame.</div>}
-              {cameraReady && <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] text-white">{cameraSource === "oak" ? "OAK-D Lite · DepthAI" : selectedCamera?.label ?? "Webcam active"}</span>}
+              {cameraReady && <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] text-white">{isOakCamera ? "OAK-D Lite · DepthAI" : selectedCamera?.label ?? "Webcam active"}</span>}
             </div>
           </div>
 
