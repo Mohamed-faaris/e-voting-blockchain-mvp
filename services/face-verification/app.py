@@ -78,6 +78,8 @@ a,button{border:1px solid #365071;background:#1a2b43;color:var(--text);border-ra
 <div class="endpoint"><code>GET /camera/oak/status</code><a href="/camera/oak/status">Open</a></div>
 <div class="endpoint"><code>GET /camera/oak/stream.mjpg</code><a href="/camera/oak/stream.mjpg" target="_blank">Open</a></div>
 <div class="endpoint"><code>GET /camera/oak/snapshot</code><a href="/camera/oak/snapshot" target="_blank">Open</a></div>
+<div class="endpoint"><code>GET /camera/oak/streams/status</code><a href="/camera/oak/streams/status">Open</a></div>
+<div class="endpoint"><code>GET /camera/oak/streams/{name}.jpg</code><a href="/camera/oak/streams/rgb.jpg" target="_blank">RGB preview</a></div>
 <div class="endpoint"><code>OpenAPI</code><a href="/openapi.json">JSON</a></div>
 </div></div>
 </section><div class="footer">Runs locally on the booth machine. Face embeddings remain in local SQLite. Recognition and stereo-depth checks are prototype diagnostics, not certified biometric security.</div>
@@ -390,6 +392,34 @@ def oak_device_status():
 @app.get("/camera/oak/status")
 def oak_camera_status():
     return oak_device_status()
+
+
+@app.get("/camera/oak/streams/status")
+def oak_streams_status():
+    try:
+        OAK_CAMERA.start()
+    except OakCameraError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "backend": "depthai",
+        "device_id": OAK_CAMERA.status(probe=False)["device_id"],
+        "streams": OAK_CAMERA.preview_status(),
+    }
+
+
+@app.get("/camera/oak/streams/{name}.jpg")
+def oak_stream_snapshot(name: str):
+    from oak_camera import PREVIEW_STREAMS
+
+    if name not in PREVIEW_STREAMS:
+        raise HTTPException(status_code=404, detail="Unknown OAK stream name.")
+    try:
+        frame = OAK_CAMERA.get_preview_frame(name)
+    except OakCameraError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if frame is None:
+        raise HTTPException(status_code=503, detail="Stream has not produced a frame yet.")
+    return Response(content=frame, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/camera/oak/snapshot")
