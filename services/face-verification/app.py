@@ -62,7 +62,7 @@ a,button{border:1px solid #365071;background:#1a2b43;color:var(--text);border-ra
 </style>
 </head>
 <body><main>
-<header class="top"><div><h1>Civic Ledger · Face Service</h1><div class="sub">Local camera, face recognition and direct OAK-D Lite DepthAI dashboard</div></div><div class="pill" id="overall">Checking service…</div></header>
+<header class="top"><div><h1>Civic Ledger · Face Service</h1><div class="sub">Local face recognition using the shared DepthAI stream service</div></div><div class="pill" id="overall">Checking service…</div></header>
 <section class="grid">
 <div class="panel"><h2>Live OAK RGB · Raw stream</h2><div class="video"><img id="stream" src="/camera/oak/stream.mjpg" alt="OAK RGB live stream with face bounding boxes" onerror="this.style.display='none';document.getElementById('streamError').hidden=false"><div id="streamError" class="sub" hidden>Stream unavailable. Check the OAK-D Lite USB connection and DepthAI status.</div></div><div class="hint">The Admin browser preview runs Tiny Face Detector JavaScript and draws face boxes over the raw OAK stream. This service dashboard displays the unannotated stream.</div><div class="actions"><button onclick="reloadStream()">Reconnect stream</button><a href="/camera/oak/snapshot" target="_blank" rel="noreferrer">Open snapshot</a><a href="/docs" target="_blank" rel="noreferrer">API docs</a></div></div>
 <div class="panel"><h2>Service status</h2><div class="metrics">
@@ -272,7 +272,7 @@ def depthai_server_get(path: str, timeout: float = 3.0) -> bytes:
             f"DepthAI Stream Server returned HTTP {exc.code} for {path}. "
             "Check that the RGB/depth stream is ready."
         ) from exc
-    except URLError as exc:
+    except (URLError, TimeoutError) as exc:
         raise RuntimeError(
             f"Cannot reach DepthAI Stream Server at {DEPTHAI_STREAM_SERVER_URL}. "
             "Start services/depthai-stream-server on port 8090."
