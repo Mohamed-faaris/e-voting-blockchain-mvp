@@ -63,12 +63,12 @@ class OakCamera:
 
         # OAK-D Lite stereo pair (OV7251 mono sensors).
         left = pipeline.create(dai.node.MonoCamera)
-        left.setBoardSocket(dai.CameraBoardSocket.LEFT)
+        left.setBoardSocket(dai.CameraBoardSocket.CAM_B)
         left.setResolution(dai.MonoCameraProperties.SensorResolution.THE_480_P)
         left.setFps(self.fps)
 
         right = pipeline.create(dai.node.MonoCamera)
-        right.setBoardSocket(dai.CameraBoardSocket.RIGHT)
+        right.setBoardSocket(dai.CameraBoardSocket.CAM_C)
         right.setResolution(dai.MonoCameraProperties.SensorResolution.THE_480_P)
         right.setFps(self.fps)
 
@@ -77,6 +77,10 @@ class OakCamera:
         stereo.setLeftRightCheck(True)
         stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
         stereo.setOutputSize(self.width, self.height)
+
+        # DepthAI v2 requires the reference RGB stream on inputAlignTo when
+        # aligning stereo depth into the CAM_A image coordinate system.
+        color.video.link(stereo.inputAlignTo)
 
         left.out.link(stereo.left)
         right.out.link(stereo.right)
