@@ -24,7 +24,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export function FaceVerificationPanel({ onVerified, onEnabledChange, onBypass }: { onVerified?: () => void; onEnabledChange?: (enabled: boolean) => void; onBypass?: () => void }) {
+export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerified?: () => void; onEnabledChange?: (enabled: boolean) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [devices, setDevices] = useState<CameraDevice[]>([]);
@@ -307,7 +307,6 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onBypass }:
                 onEnabledChange?.(false);
                 setResult(null);
                 stopCamera();
-                onBypass?.();
               }}
             >
               Continue without face verification
