@@ -15,8 +15,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
-from oak_camera import OakCamera, OakCameraError
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parent
 MODEL_DIR = ROOT / "models"
@@ -34,6 +34,7 @@ OAK_RGB_WIDTH = int(os.getenv("OAK_RGB_WIDTH", "640"))
 OAK_RGB_HEIGHT = int(os.getenv("OAK_RGB_HEIGHT", "480"))
 OAK_STREAM_FPS = max(1, min(30, int(os.getenv("OAK_STREAM_FPS", "15"))))
 FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.363"))
+DEPTHAI_STREAM_SERVER_URL = os.getenv("DEPTHAI_STREAM_SERVER_URL", "http://127.0.0.1:8090").rstrip("/")
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
 DETECTOR_MODEL = MODEL_DIR / "face_detection_yunet_2023mar.onnx"
@@ -126,8 +127,6 @@ class EnrollRequest(ImageRequest):
 class VerifyRequest(ImageRequest):
     check_depth: bool = False
 
-
-OAK_CAMERA = OakCamera(width=OAK_RGB_WIDTH, height=OAK_RGB_HEIGHT, fps=OAK_STREAM_FPS)
 
 
 def init_db() -> None:
@@ -259,19 +258,59 @@ def evaluate_depth(depth: np.ndarray, box: tuple[int, int, int, int], rgb_size: 
     }
 
 
-def request_frames(request: ImageRequest) -> tuple[np.ndarray, np.ndarray | None]:
-    """Get one RGB frame and, for OAK, its synchronized RGB-aligned depth frame."""
+def depthai_server_get(path: str, timeout: float = 3.0) -> bytes:
+    """Read a frame/status response from the working DepthAI Stream Server."""
+    request = Request(
+        f"{DEPTHAI_STREAM_SERVER_URL}{path}",
+        headers={"Cache-Control": "no-cache"},
+    )
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            return response.read()
+    except HTTPError as exc:
+        raise RuntimeError(
+            f"DepthAI Stream Server returned HTTP {exc.code} for {path}. "
+            "Check that the RGB/depth stream is ready."
+        ) from exc
+    except URLError as exc:
+        raise RuntimeError(
+            f"Cannot reach DepthAI Stream Server at {DEPTHAI_STREAM_SERVER_URL}. "
+            "Start services/depthai-stream-server on port 8090."
+        ) from exc
+
+
+def decode_oak_rgb() -> np.ndarray:
+    payload = depthai_server_get("/streams/rgb.jpg")
+    image = cv2.imdecode(np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise RuntimeError("DepthAI Stream Server returned an invalid RGB JPEG.")
+    return image
+
+
+def decode_oak_depth() -> np.ndarray:
+    payload = depthai_server_get("/api/frame/depth.png")
+    depth = cv2.imdecode(np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    if depth is None or depth.dtype != np.uint16:
+        raise RuntimeError("DepthAI Stream Server did not return a 16-bit depth PNG.")
+    return depth
+
+
+def request_frames(
+    request: ImageRequest,
+    include_depth: bool = False,
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Read OAK frames from the single device-owning stream server."""
     if request.camera_source == "oak":
         try:
-            rgb, depth, _sequence = OAK_CAMERA.get_frame_pair(timeout=3.0)
-            return rgb, depth
-        except OakCameraError as exc:
+            image = decode_oak_rgb()
+            depth = decode_oak_depth() if include_depth else None
+            return image, depth
+        except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if not request.image:
         raise HTTPException(status_code=422, detail="A base64 browser camera image is required for webcam mode.")
     return decode_image(request.image), None
-
 
 def template_status() -> bool:
     with closing(sqlite3.connect(DB_PATH)) as connection:
@@ -290,12 +329,12 @@ def dashboard():
 
 @app.get("/health")
 def health():
-    oak = OAK_CAMERA.status(probe=True)
+    oak = oak_device_status()
     return {
         "ok": True,
         "models_available": DETECTOR_MODEL.exists() and RECOGNIZER_MODEL.exists(),
         "face_registered": template_status(),
-        "camera_backend": "DepthAI direct SDK",
+        "camera_backend": "DepthAI Stream Server HTTP API",
         "oak": oak,
         "storage": "local SQLite (single embedding only)",
     }
@@ -326,7 +365,7 @@ def enroll(request: EnrollRequest):
 def verify(request: VerifyRequest):
     if not template_status():
         raise HTTPException(status_code=404, detail="No face is registered on this booth.")
-    image, depth = request_frames(request)
+    image, depth = request_frames(request, include_depth=request.check_depth)
     feature, box = extract_face(image)
     with closing(sqlite3.connect(DB_PATH)) as connection:
         row = connection.execute("SELECT embedding FROM face_template WHERE id = 1").fetchone()
@@ -363,27 +402,48 @@ def delete_enrollment():
 
 
 def oak_device_status():
-    status = OAK_CAMERA.status(probe=True)
+    try:
+        payload = json.loads(depthai_server_get("/api/status", timeout=2.0))
+    except (RuntimeError, ValueError) as exc:
+        error = str(exc)
+        return {
+            "backend": "depthai-stream-server",
+            "rgb": {"available": False, "device": "DepthAI CAM_A", "error": error},
+            "depth": {"available": False, "socket": "StereoDepth aligned to CAM_A", "error": error},
+            "ready": False,
+            "device_id": None,
+            "sdk_version": None,
+            "resolution": f"{OAK_RGB_WIDTH}x{OAK_RGB_HEIGHT}",
+            "fps": 0,
+            "synchronized": False,
+            "depth_aligned_to": "RGB / CAM_A",
+        }
+
+    streams = {item.get("name"): bool(item.get("ready")) for item in payload.get("available_streams", [])}
+    rgb_ready = bool(payload.get("rgb_available", streams.get("rgb", False)))
+    depth_ready = bool(payload.get("depth_available", streams.get("depth", False)))
+    shared_error = payload.get("error")
     return {
-        "backend": "depthai-v2",
+        "backend": "depthai-stream-server",
         "rgb": {
-            "available": status["rgb"],
-            "device": f"DepthAI CAM_A ({status["device_id"] or 'OAK-D Lite'})",
-            "error": status["rgb_error"],
+            "available": rgb_ready,
+            "device": f"DepthAI CAM_A ({payload.get('device_id') or 'OAK-D Lite'})",
+            "error": None if rgb_ready else shared_error or "RGB stream has not produced a frame.",
         },
         "depth": {
-            "available": status["depth"],
-            "socket": "DepthAI StereoDepth (CAM_B + CAM_C), aligned to CAM_A",
-            "error": status["depth_error"],
+            "available": depth_ready,
+            "socket": "StereoDepth CAM_B + CAM_C, aligned to CAM_A",
+            "error": None if depth_ready else shared_error or "Stereo depth stream has not produced a frame.",
         },
-        "ready": status["rgb"] and status["depth"],
-        "device_id": status["device_id"],
-        "sdk_version": status["sdk_version"],
-        "resolution": status["resolution"],
-        "fps": status["fps"],
+        "ready": bool(payload.get("connected")) and rgb_ready and depth_ready,
+        "device_id": payload.get("device_id"),
+        "sdk_version": payload.get("sdk_version"),
+        "resolution": f"{OAK_RGB_WIDTH}x{OAK_RGB_HEIGHT}",
+        "fps": payload.get("fps", 0),
         "synchronized": False,
-        "depth_aligned_to": status["depth_aligned_to"],
+        "depth_aligned_to": "RGB / CAM_A",
     }
+
 
 @app.get("/camera/oak/status")
 def oak_camera_status():
@@ -393,64 +453,44 @@ def oak_camera_status():
 @app.get("/camera/oak/snapshot")
 def oak_camera_snapshot():
     try:
-        frame, _depth, _sequence = OAK_CAMERA.get_frame_pair(timeout=3.0)
-        ok, encoded = cv2.imencode(".jpg", frame)
-        if not ok:
-            raise HTTPException(status_code=500, detail="Could not encode OAK camera frame.")
+        frame = depthai_server_get("/streams/rgb.jpg")
         return Response(
-            content=encoded.tobytes(),
+            content=frame,
             media_type="image/jpeg",
             headers={"Cache-Control": "no-store"},
         )
-    except OakCameraError as exc:
+    except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 def oak_mjpeg_generator():
-    """Stream frames captured directly through the DepthAI SDK."""
-    sequence = 0
+    """Adapt the working DepthAI Stream Server's latest RGB JPEG to MJPEG."""
     frame_delay = 1.0 / OAK_STREAM_FPS
     while True:
         started = time.monotonic()
         try:
-            frame, _depth, sequence = OAK_CAMERA.get_frame_pair(
-                timeout=4.0,
-                after_sequence=sequence,
-            )
-            # Send a clean RGB frame. Face boxes are rendered by browser JavaScript.
-            ok, encoded = cv2.imencode(
-                ".jpg",
-                frame,
-                [cv2.IMWRITE_JPEG_QUALITY, 80],
-            )
-            if not ok:
-                continue
+            encoded = depthai_server_get("/streams/rgb.jpg", timeout=3.0)
             yield (
-                b"--frame\r\nContent-Type: image/jpeg\r\n"
-                b"Cache-Control: no-store\r\n\r\n"
-                + encoded.tobytes()
-                + b"\r\n"
+                b"--frame\\r\\nContent-Type: image/jpeg\\r\\n"
+                b"Cache-Control: no-store\\r\\n\\r\\n"
+                + encoded
+                + b"\\r\\n"
             )
-        except OakCameraError as exc:
+        except RuntimeError as exc:
+            logger_error = str(exc).encode("utf-8", errors="replace")[:180]
             error_frame = np.zeros((240, 640, 3), dtype=np.uint8)
-            cv2.putText(
-                error_frame,
-                f"DEPTHAI CAMERA ERROR: {str(exc)[:65]}",
-                (10, 120),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (0, 0, 255),
-                2,
-            )
-            ok, encoded = cv2.imencode(".jpg", error_frame)
+            cv2.putText(error_frame, "DEPTHAI STREAM SERVER UNAVAILABLE", (10, 105),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 0, 255), 1)
+            cv2.putText(error_frame, logger_error.decode("utf-8", errors="ignore")[:75], (10, 135),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
+            ok, image = cv2.imencode(".jpg", error_frame)
             if ok:
                 yield (
-                    b"--frame\r\nContent-Type: image/jpeg\r\n"
-                    b"Cache-Control: no-store\r\n\r\n"
-                    + encoded.tobytes()
-                    + b"\r\n"
+                    b"--frame\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n"
+                    + image.tobytes()
+                    + b"\\r\\n"
                 )
-            break
+            return
 
         remaining = frame_delay - (time.monotonic() - started)
         if remaining > 0:
@@ -459,18 +499,8 @@ def oak_mjpeg_generator():
 
 @app.get("/camera/oak/stream.mjpg")
 def oak_camera_stream():
-    try:
-        OAK_CAMERA.start()
-    except OakCameraError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
     return StreamingResponse(
         oak_mjpeg_generator(),
         media_type="multipart/x-mixed-replace; boundary=frame",
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
     )
-
-
-@app.on_event("shutdown")
-def shutdown_oak_camera():
-    OAK_CAMERA.stop()
