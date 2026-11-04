@@ -31,6 +31,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   const [deviceId, setDeviceId] = useState("");
   const [cameraSource, setCameraSource] = useState<CameraSource>("webcam");
   const [cameraReady, setCameraReady] = useState(false);
+  const [oakPreviewActive, setOakPreviewActive] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [serviceError, setServiceError] = useState("");
   const [status, setStatus] = useState<FaceStatus | null>(null);
@@ -43,6 +44,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    setOakPreviewActive(false);
     setCameraReady(false);
   }, []);
 
@@ -67,15 +69,11 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
       }
       const cameras = list.filter((device) => device.kind === "videoinput").map((device, index) => {
         const label = device.label || `Camera ${index + 1}`;
-        const oak = /oak|depthai|rgb bridge/i.test(label);
-        return { deviceId: device.deviceId, label, source: oak ? "oak" as const : "webcam" as const };
+        return { deviceId: device.deviceId, label, source: "webcam" as const };
       });
       setDevices(cameras);
-      const preferred = cameras.find((camera) => camera.source === "oak") ?? cameras[0];
-      if (preferred) {
-        setDeviceId((current) => current || preferred.deviceId);
-        if (cameras.some((camera) => camera.source === "oak")) setCameraSource("oak");
-      }
+      const preferred = cameras[0];
+      if (preferred) setDeviceId((current) => current || preferred.deviceId);
       setCameraError("");
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : "Could not list camera devices.");
@@ -86,6 +84,17 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
     stopCamera();
     setCameraError("");
     try {
+      if (cameraSource === "oak") {
+        const response = await fetch(`${API}/camera/oak/status`, { cache: "no-store" });
+        const data = await parseResponse<{ ready: boolean; rgb: { error?: string | null }; depth: { error?: string | null } }>(response);
+        if (!data.ready) {
+          throw new Error(data.rgb.error || data.depth.error || "DepthAI could not start a synchronized OAK RGB/depth stream.");
+        }
+        setOakPreviewActive(true);
+        setCameraReady(true);
+        return;
+      }
+
       const constraints: MediaStreamConstraints = {
         audio: false,
         video: deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 640 }, height: { ideal: 480 } } : { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }
@@ -101,7 +110,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : "Could not start selected camera.");
     }
-  }, [deviceId, refreshCameras, stopCamera]);
+  }, [cameraSource, deviceId, refreshCameras, stopCamera]);
 
   useEffect(() => {
     void refreshStatus();
@@ -112,10 +121,16 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
     if (enabled) void refreshCameras();
   }, [enabled, refreshCameras]);
 
-  const capture = () => {
+  const capturePayload = () => {
+    if (cameraSource === "oak") {
+      if (!cameraReady || !oakPreviewActive) throw new Error("Start the OAK-D Lite DepthAI stream first.");
+      // The Python service captures the OAK RGB/depth pair directly from DepthAI.
+      return { camera_source: "oak" as const };
+    }
+
     const video = videoRef.current;
     if (!video || !cameraReady || video.videoWidth === 0) {
-      throw new Error("Start the selected camera before capturing a face.");
+      throw new Error("Start the selected webcam before capturing a face.");
     }
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
@@ -123,7 +138,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not prepare camera frame.");
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.9).split(",", 2)[1];
+    return { image: canvas.toDataURL("image/jpeg", 0.9).split(",", 2)[1], camera_source: "webcam" as const };
   };
 
   const enroll = async () => {
@@ -135,7 +150,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
       const response = await fetch(`${API}/face/enroll`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: capture(), camera_source: cameraSource, replace_existing: false })
+        body: JSON.stringify({ ...capturePayload(), replace_existing: false })
       });
       const data = await parseResponse<{ message: string }>(response);
       setNotice(data.message);
@@ -156,7 +171,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
       const response = await fetch(`${API}/face/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: capture(), camera_source: cameraSource, check_depth: cameraSource === "oak" })
+        body: JSON.stringify({ ...capturePayload(), check_depth: cameraSource === "oak" })
       });
       const data = await parseResponse<FaceResult>(response);
       setResult(data);
@@ -177,7 +192,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
       const response = await fetch(`${API}/face/enroll`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: capture(), camera_source: cameraSource, replace_existing: true })
+        body: JSON.stringify({ ...capturePayload(), replace_existing: true })
       });
       const data = await parseResponse<{ message: string }>(response);
       setNotice(data.message);
@@ -206,7 +221,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   };
 
   const selectedCamera = devices.find((device) => device.deviceId === deviceId);
-  const sourceCameraAvailable = devices.some((device) => device.source === cameraSource);
+  const sourceCameraAvailable = cameraSource === "oak" || devices.some((device) => device.source === "webcam");
   const showCameraControls = enabled || status?.registered === false;
 
   return (
@@ -241,32 +256,30 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
                 Camera type
                 <select className="w-full rounded-lg border border-slate-300 bg-white p-2.5" value={cameraSource} onChange={(event) => {
                   const source = event.target.value as CameraSource;
+                  stopCamera();
                   setCameraSource(source);
-                  const matching = devices.find((device) => device.source === source);
-                  if (matching) setDeviceId(matching.deviceId);
                   setResult(null);
                 }}>
                   <option value="webcam">Default webcam / USB camera</option>
-                  <option value="oak">OAK-D Lite RGB bridge (stereo depth)</option>
+                  <option value="oak">OAK-D Lite (DepthAI direct RGB + stereo depth)</option>
                 </select>
               </label>
-              <label className="block space-y-1 text-xs font-semibold text-slate-700">
+              {cameraSource === "webcam" && <label className="block space-y-1 text-xs font-semibold text-slate-700">
                 Video device
                 <select className="w-full rounded-lg border border-slate-300 bg-white p-2.5" value={deviceId} onChange={(event) => {
                   const next = devices.find((device) => device.deviceId === event.target.value);
                   setDeviceId(event.target.value);
-                  if (next && /oak|depthai|rgb bridge/i.test(next.label)) setCameraSource("oak");
                   setResult(null);
                 }}>
                   {devices.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label}</option>)}
                 </select>
-              </label>
+              </label>}
               <div className="flex gap-2">
                 <button type="button" onClick={() => void refreshCameras()} className="ev-button secondary flex-1"><RefreshCw size={14} /> Refresh</button>
                 <button type="button" disabled={!sourceCameraAvailable} onClick={() => void startCamera()} className="ev-button flex-1 disabled:opacity-50"><Video size={14} /> Start camera</button>
               </div>
               <p className="text-[11px] text-slate-500">
-                {cameraSource === "oak" ? "OAK-D Lite selected. Face matching uses the OAK RGB bridge and reads the aligned stereo-depth socket from the Python service." : "Standard webcam selected. Face matching works, but stereo-depth checks are unavailable."}
+                {cameraSource === "oak" ? "OAK-D Lite selected. The Python service connects directly through the DepthAI SDK and captures synchronized RGB + aligned stereo depth. No browser camera device or bridge is used." : "Standard webcam selected. Face matching works, but stereo-depth checks are unavailable."}
               </p>
               {!sourceCameraAvailable && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
@@ -276,8 +289,13 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
             </div>
             <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-lg border border-slate-300 bg-slate-950">
               <video ref={videoRef} muted playsInline className="h-full max-h-64 w-full object-cover" />
+              {cameraSource === "oak" ? (
+                oakPreviewActive && <img src={`${API}/camera/oak/stream.mjpg`} alt="OAK-D Lite DepthAI RGB stream" className="h-full max-h-64 w-full object-contain" />
+              ) : (
+                <video ref={videoRef} muted playsInline className="h-full max-h-64 w-full object-cover" />
+              )}
               {!cameraReady && <div className="absolute px-4 text-center text-xs text-slate-300">Start a camera to preview the registration/verification frame.</div>}
-              {cameraReady && <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] text-white">{selectedCamera?.label ?? "Camera active"}</span>}
+              {cameraReady && <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] text-white">{cameraSource === "oak" ? "OAK-D Lite · DepthAI" : selectedCamera?.label ?? "Webcam active"}</span>}
             </div>
           </div>
 
@@ -344,7 +362,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
       )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
-        Privacy: the Python service stores one face embedding locally; it does not save captured camera frames. This prototype's depth-spread test is only a heuristic and is not certified liveness detection. If the service or bridge is unavailable, use the existing non-biometric check-in flow.
+        Privacy: the Python service stores one face embedding locally; it does not save captured camera frames. This prototype's depth-spread test is only a heuristic and is not certified liveness detection. If the service or selected camera is unavailable, use the existing non-biometric check-in flow.
       </p>
     </section>
   );
