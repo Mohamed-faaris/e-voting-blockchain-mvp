@@ -48,12 +48,13 @@ From the repository root:
 
 ~~~bash
 cd services/face-verification
+uv lock
 uv sync
 uv run python download_models.py
 uv run uvicorn app:app --host 127.0.0.1 --port 8765
 ~~~
 
-The service binds to loopback only. Model files are downloaded into models/ and are intentionally not committed. The default local data directory is owner-only (0700) and the SQLite database is owner-only (0600) where supported.
+Run uv lock after pulling this branch so the lockfile resolves the pinned DepthAI v2.32.0.0 dependency. The service binds to loopback only. Model files are downloaded into models/ and are intentionally not committed. The default local data directory is owner-only (0700) and the SQLite database is owner-only (0600) where supported.
 
 Connect the OAK-D Lite directly to the booth machine before starting the OAK camera. On Linux, make sure the current user has USB access according to the [Luxonis installation instructions](https://docs.luxonis.com/software/depthai/).
 
