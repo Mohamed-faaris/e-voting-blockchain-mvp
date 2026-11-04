@@ -145,8 +145,10 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   useEffect(() => {
     const canvas = overlayRef.current;
     if (!cameraReady || !canvas) {
-      const context = canvas?.getContext("2d");
-      context?.clearRect(0, 0, canvas.width, canvas.height);
+      if (canvas) {
+        const context = canvas.getContext("2d");
+        context?.clearRect(0, 0, canvas.width, canvas.height);
+      }
       setFaceDetectionStatus("Face boxes are idle.");
       return;
     }
