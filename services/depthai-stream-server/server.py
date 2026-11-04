@@ -23,6 +23,7 @@ class DepthAIStreamHub:
         self.device: Any = None
         self.queues: dict[str, Any] = {}
         self.frames: dict[str, bytes] = {}
+        self.raw_frames: dict[str, np.ndarray] = {}
         self.reader: threading.Thread | None = None
         self.running = False
         self.error: str | None = None
@@ -94,6 +95,7 @@ class DepthAIStreamHub:
                 self.queues = queues
                 self.device_id = device.getMxId()
                 self.frames.clear()
+                self.raw_frames.clear()
                 self.sequence = {name: 0 for name in STREAM_NAMES}
                 self.error = None
                 self.running = True
@@ -142,6 +144,8 @@ class DepthAIStreamHub:
                     jpeg = self.encode(name, frame)
                     with self.lock:
                         self.frames[name] = jpeg
+                        # Preserve the native frame for consumers that need metric depth.
+                        self.raw_frames[name] = np.ascontiguousarray(frame).copy()
                         self.sequence[name] += 1
                     got_frame = True
                 if got_frame:
@@ -167,6 +171,8 @@ class DepthAIStreamHub:
                 "device_id": self.device_id,
                 "sdk_version": getattr(dai, "__version__", "unknown"),
                 "fps": round(self.fps, 1),
+                "rgb_available": "rgb" in self.raw_frames,
+                "depth_available": "depth" in self.raw_frames and self.raw_frames["depth"].dtype == np.uint16,
                 "available_streams": [{"name": n, "ready": n in self.frames,
                                         "sequence": self.sequence[n]} for n in STREAM_NAMES],
                 "error": self.error,
@@ -175,6 +181,11 @@ class DepthAIStreamHub:
     def get_frame(self, name: str) -> bytes | None:
         with self.lock:
             return self.frames.get(name)
+
+    def get_raw_frame(self, name: str) -> np.ndarray | None:
+        with self.lock:
+            frame = self.raw_frames.get(name)
+            return frame.copy() if frame is not None else None
 
     def stop(self) -> None:
         with self.lock:
@@ -226,6 +237,26 @@ def stream_frame(name: str) -> Response:
         raise HTTPException(status_code=503, detail="Stream has not produced a frame yet")
     return Response(frame, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
+@app.get("/api/frame/depth.png")
+def raw_depth_frame() -> Response:
+    """Return the uncolorized, aligned 16-bit depth image in millimetres."""
+    frame = hub.get_raw_frame("depth")
+    if frame is None:
+        raise HTTPException(status_code=503, detail="Stereo depth has not produced a frame yet")
+    if frame.dtype != np.uint16:
+        raise HTTPException(status_code=500, detail=f"Expected uint16 depth; received {frame.dtype}")
+    ok, encoded = cv2.imencode(".png", frame)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Could not encode raw depth frame")
+    return Response(encoded.tobytes(), media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "device_connected": hub.snapshot()["connected"]}
+    state = hub.snapshot()
+    return {
+        "ok": True,
+        "device_connected": state["connected"],
+        "rgb_available": state["rgb_available"],
+        "depth_available": state["depth_available"],
+    }
