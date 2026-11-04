@@ -41,9 +41,11 @@ The service binds to loopback only. Keep it on the booth machine. The model down
 1. Open Admin → Voter Check-in.
 2. Select either the default webcam or the OAK RGB camera from the browser camera list.
 3. Use the admin face registration action to enroll/replace the booth's single face template.
-4. Face verification is optional. If enabled, capture a frame and call the local verification API. Only the single enrolled face template is accepted.
-5. With OAK selected, request stereo depth verification. With a regular webcam, depth checks are unavailable.
-6. If the local service, camera or depth bridge is unavailable, the existing voter check-in remains available. A positive face mismatch is shown as a mismatch; it is not silently treated as a match.
+4. Face verification is optional and disabled by default. Enable it in the Admin booth panel when required.
+5. Admins can register, replace or delete the single locally stored face template. The service accepts only a match against that enrolled template.
+6. When enabled, a smartcard tap is held pending until the enrolled face matches. OAK-D Lite additionally requires the stereo-depth heuristic to pass. A regular webcam performs face matching without depth.
+7. The manual roster authentication button is disabled while face verification is enabled, so it cannot bypass the face gate. Use the smartcard flow instead.
+8. If the service, camera, missing enrollment or depth bridge is operationally unavailable, an explicit “Continue without face verification” action allows the existing non-biometric check-in. A face mismatch or a valid depth frame that fails the depth heuristic does not expose this bypass.
 
 ## API
 
