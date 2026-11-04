@@ -9,7 +9,7 @@ type FaceResult = {
   matched: boolean;
   similarity: number;
   threshold: number;
-  depth: null | { passed: boolean; reason: string; valid_ratio?: number; median_depth_mm?: number; depth_spread_mm?: number };
+  depth: null | { passed: boolean; reason: string; valid_ratio?: number; median_depth_mm?: number; depth_spread_mm?: number; nose_relief_mm?: number };
   message: string;
   note: string;
 };
@@ -291,6 +291,7 @@ export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void 
               <div>Similarity: {(result.similarity * 100).toFixed(1)}% · Match threshold: {(result.threshold * 100).toFixed(1)}%</div>
               {result.depth && <div>Depth check: {result.depth.passed ? "Passed" : "Not passed"} — {result.depth.reason}</div>}
               {result.depth?.depth_spread_mm !== undefined && <div>Depth spread: {result.depth.depth_spread_mm} mm · Valid depth: {((result.depth.valid_ratio ?? 0) * 100).toFixed(0)}%</div>}
+              {result.depth?.nose_relief_mm !== undefined && <div>Nose-to-cheek depth relief: {result.depth.nose_relief_mm} mm</div>}
               <p>{result.note}</p>
             </div>
           )}
