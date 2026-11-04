@@ -37,7 +37,7 @@ export const AdminPage: React.FC = () => {
           Election Administration & Telemetry Portal
         </h2>
         <p className="text-xs text-slate-500 mt-1">
-          High-level extrapolated election statistics. Individual ballots remain encrypted and unlinkable.
+          Demo statistics from the shared API. Ballot payloads are Base64-encoded, not encrypted or unlinkable.
         </p>
       </div>
 

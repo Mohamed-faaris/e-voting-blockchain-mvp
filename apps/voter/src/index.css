@@ -1,1 +1,17 @@
-@import "tailwindcss";@import "@evoting/design-system/tokens.css";.voter-wrap{max-width:760px;margin:0 auto;display:grid;gap:16px}.voter-step{display:flex;align-items:center;gap:10px;color:var(--ev-muted);font-size:11px}.voter-step span{border:1px solid var(--ev-border);border-radius:999px;padding:7px 10px}.voter-step span.active{background:var(--ev-primary-soft);color:var(--ev-primary);border-color:#c9d8fa}
+@import "tailwindcss";
+@import "@evoting/design-system/tokens.css";
+
+.voter-wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; }
+.voter-step { display: flex; align-items: center; gap: 8px; color: var(--ev-muted); font-size: 11px; flex-wrap: wrap; }
+.voter-step span {
+  border: 1px solid var(--ev-border);
+  border-radius: 7px;
+  padding: 6px 9px;
+  background: var(--ev-surface);
+}
+.voter-step span.active {
+  background: var(--ev-primary-soft);
+  color: var(--ev-primary-strong);
+  border-color: #d9bdb0;
+  font-weight: 650;
+}
