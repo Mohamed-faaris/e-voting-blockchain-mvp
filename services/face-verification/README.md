@@ -16,6 +16,17 @@ There is no OAK bridge process, UVC virtual camera, /dev/video10 dependency, or 
 
 The regular webcam remains a separate browser-camera option. Selecting OAK-D Lite does not use browser camera enumeration or getUserMedia().
 
+## Browser-side face bounding boxes
+
+The Admin panel uses the existing @vladmandic/face-api dependency and Tiny Face Detector in the browser.
+
+- The same JavaScript detector processes the selected webcam video or the raw OAK MJPEG image.
+- A transparent canvas draws green face boxes and confidence percentages over the preview.
+- Model weights are copied from the installed npm package into the Vite public directory before Admin dev/build starts. The model is served locally from /models; the browser does not download model files from a third-party host at runtime.
+- The Python service sends unannotated OAK RGB frames. Face-box rendering is not performed by OpenCV in the service.
+- Browser face detection is a visual overlay only. The Python service's face matching and OAK stereo-depth check remain separate verification steps.
+
+
 ## Face verification
 
 - OpenCV YuNet detects faces.
@@ -77,7 +88,7 @@ If the OAK device cannot be opened, the service reports the DepthAI error and th
 - GET / — local diagnostic dashboard.
 - GET /health — service, model and direct DepthAI camera status.
 - GET /camera/oak/status — device identity, SDK version, RGB/depth availability, alignment and synchronization status.
-- GET /camera/oak/stream.mjpg — annotated live RGB stream captured directly from DepthAI.
+- GET /camera/oak/stream.mjpg — raw live RGB stream captured directly from DepthAI (face boxes are drawn by the Admin browser).
 - GET /camera/oak/snapshot — one annotated OAK RGB frame.
 - GET /face/status — local enrollment status.
 - POST /face/enroll — enroll from a webcam base64 image or direct OAK capture.

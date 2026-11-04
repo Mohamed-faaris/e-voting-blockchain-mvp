@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as faceapi from "@vladmandic/face-api";
 import { CheckCircle2, Fingerprint, RefreshCw, ShieldAlert, Trash2, UserRound, Video } from "lucide-react";
 
 type CameraSource = "webcam" | "oak";
@@ -15,6 +16,20 @@ type FaceResult = {
 };
 
 const API = "/face-api";
+const FACE_MODEL_PATH = "/models";
+let faceDetectorLoad: Promise<void> | null = null;
+
+function loadBrowserFaceDetector(): Promise<void> {
+  if (!faceDetectorLoad) {
+    faceDetectorLoad = (async () => {
+      await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_PATH);
+    })().catch((error) => {
+      faceDetectorLoad = null;
+      throw error;
+    });
+  }
+  return faceDetectorLoad;
+}
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({}));
@@ -26,12 +41,15 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
 export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback, fallbackAvailable = false }: { onVerified?: () => void; onEnabledChange?: (enabled: boolean) => void; onFallback?: () => void; fallbackAvailable?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const oakImageRef = useRef<HTMLImageElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [devices, setDevices] = useState<CameraDevice[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [cameraSource, setCameraSource] = useState<CameraSource>("webcam");
   const [cameraReady, setCameraReady] = useState(false);
   const [oakPreviewActive, setOakPreviewActive] = useState(false);
+  const [faceDetectionStatus, setFaceDetectionStatus] = useState("Face boxes are idle.");
   const [cameraError, setCameraError] = useState("");
   const [serviceError, setServiceError] = useState("");
   const [status, setStatus] = useState<FaceStatus | null>(null);
@@ -39,6 +57,8 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<FaceResult | null>(null);
   const [notice, setNotice] = useState("");
+  const isOakCamera = cameraSource === "oak";
+  const isWebcam = !isOakCamera;
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -120,6 +140,120 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   useEffect(() => {
     if (enabled && isWebcam) void refreshCameras();
   }, [enabled, cameraSource, refreshCameras]);
+
+
+  useEffect(() => {
+    const canvas = overlayRef.current;
+    if (!cameraReady || !canvas) {
+      if (canvas) {
+        const context = canvas.getContext("2d");
+        context?.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      setFaceDetectionStatus("Face boxes are idle.");
+      return;
+    }
+
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let modelReady = false;
+
+    const drawBoxes = (
+      source: HTMLVideoElement | HTMLImageElement,
+      detections: faceapi.FaceDetection[],
+    ) => {
+      const overlayCanvas = canvas;
+      const context = overlayCanvas.getContext("2d");
+      if (!context) return;
+
+      const frameWidth = source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
+      const frameHeight = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
+      const bounds = overlayCanvas.getBoundingClientRect();
+      if (!frameWidth || !frameHeight || !bounds.width || !bounds.height) return;
+
+      const pixelRatio = window.devicePixelRatio || 1;
+      const width = Math.round(bounds.width * pixelRatio);
+      const height = Math.round(bounds.height * pixelRatio);
+      if (overlayCanvas.width !== width || overlayCanvas.height !== height) {
+        overlayCanvas.width = width;
+        overlayCanvas.height = height;
+      }
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.clearRect(0, 0, bounds.width, bounds.height);
+
+      // Both preview elements use object-fit: contain. Match the image's
+      // letterboxing so the browser boxes stay on the detected face.
+      const scale = Math.min(bounds.width / frameWidth, bounds.height / frameHeight);
+      const offsetX = (bounds.width - frameWidth * scale) / 2;
+      const offsetY = (bounds.height - frameHeight * scale) / 2;
+
+      for (const detection of detections) {
+        const box = detection.box;
+        const x = offsetX + box.x * scale;
+        const y = offsetY + box.y * scale;
+        const boxWidth = box.width * scale;
+        const boxHeight = box.height * scale;
+        const label = `Face ${Math.round(detection.score * 100)}%`;
+
+        context.strokeStyle = "#22c55e";
+        context.lineWidth = 2;
+        context.strokeRect(x, y, boxWidth, boxHeight);
+        context.font = "600 12px system-ui, sans-serif";
+        const labelWidth = context.measureText(label).width + 12;
+        const labelY = Math.max(0, y - 23);
+        context.fillStyle = "rgba(8, 20, 15, 0.82)";
+        context.fillRect(x, labelY, labelWidth, 21);
+        context.fillStyle = "#dcfce7";
+        context.fillText(label, x + 6, labelY + 15);
+      }
+    };
+
+    const detectLoop = async () => {
+      if (!active) return;
+      try {
+        await loadBrowserFaceDetector();
+        modelReady = true;
+        const source = isOakCamera ? oakImageRef.current : videoRef.current;
+        const sourceReady = source && (
+          source instanceof HTMLVideoElement
+            ? source.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && source.videoWidth > 0
+            : source.complete && source.naturalWidth > 0
+        );
+
+        if (source && sourceReady) {
+          const detections = await faceapi.detectAllFaces(
+            source,
+            new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }),
+          );
+          if (!active) return;
+          drawBoxes(source, detections);
+          setFaceDetectionStatus(
+            detections.length
+              ? `JavaScript detected ${detections.length} face${detections.length === 1 ? "" : "s"}.`
+              : "JavaScript face detection active · no face in frame.",
+          );
+        }
+      } catch (error) {
+        if (active) {
+          const message = error instanceof Error ? error.message : "Browser face detection failed.";
+          setFaceDetectionStatus(`Browser face detection unavailable: ${message}`);
+          console.error("Browser face detection failed", error);
+        }
+        return;
+      } finally {
+        if (active) timer = setTimeout(detectLoop, modelReady ? 140 : 300);
+      }
+    };
+
+    setFaceDetectionStatus("Loading browser face detector…");
+    void detectLoop();
+
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+      const context = canvas.getContext("2d");
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+    };
+  }, [cameraReady, isOakCamera, oakPreviewActive]);
 
   const capturePayload = () => {
     if (isOakCamera) {
@@ -221,8 +355,6 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   };
 
   const selectedCamera = devices.find((device) => device.deviceId === deviceId);
-  const isOakCamera = cameraSource === "oak";
-  const isWebcam = !isOakCamera;
   const sourceCameraAvailable = isOakCamera || devices.some((device) => device.source === "webcam");
   const showCameraControls = enabled || status?.registered === false;
 
@@ -290,14 +422,16 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
             </div>
             <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-lg border border-slate-300 bg-slate-950">
               {isOakCamera ? (
-                oakPreviewActive && <img src={`${API}/camera/oak/stream.mjpg`} alt="OAK-D Lite DepthAI RGB stream" className="h-full max-h-64 w-full object-contain" />
+                oakPreviewActive && <img ref={oakImageRef} src={`${API}/camera/oak/stream.mjpg`} alt="OAK-D Lite DepthAI RGB stream" className="h-full max-h-64 w-full object-contain" />
               ) : (
-                <video ref={videoRef} muted playsInline className="h-full max-h-64 w-full object-cover" />
+                <video ref={videoRef} muted playsInline className="h-full max-h-64 w-full object-contain" />
               )}
+              <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />
               {!cameraReady && <div className="absolute px-4 text-center text-xs text-slate-300">Start a camera to preview the registration/verification frame.</div>}
               {cameraReady && <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] text-white">{isOakCamera ? "OAK-D Lite · DepthAI" : selectedCamera?.label ?? "Webcam active"}</span>}
             </div>
           </div>
+          <p className="text-[11px] text-slate-500" aria-live="polite">{faceDetectionStatus}</p>
 
           <div className="flex flex-wrap gap-2">
             {!status?.registered ? (
