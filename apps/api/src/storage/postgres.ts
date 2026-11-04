@@ -12,11 +12,19 @@ export const CANDIDATES: Candidate[] = [
 const database = createDatabase();
 const { client } = database;
 
-/** postgres.js JSON helpers require JSON-compatible values, not domain interfaces. */
-function toDatabaseJson(value: unknown) {
+/** Serialize JSONB and timestamps as primitive strings for postgres.js parameters. */
+function toDatabaseJson(value: unknown): string {
   const serialized = JSON.stringify(value);
   if (serialized === undefined) throw new Error("Value cannot be serialized as JSON.");
-  return JSON.parse(serialized);
+  return serialized;
+}
+
+function toPostgresTimestamp(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new RangeError(`Invalid PostgreSQL timestamp: ${String(value)}`);
+  }
+  return date.toISOString();
 }
 
 export const storage = {
@@ -94,10 +102,10 @@ export const storage = {
       }
 
       await tx`INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
-        VALUES (${block.index}, ${block.districtId}, ${new Date(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${tx.json(toDatabaseJson(block))})`;
+        VALUES (${block.index}, ${block.districtId}, ${toPostgresTimestamp(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${toDatabaseJson(block)})`;
       for (const item of block.transactions) {
         await tx`INSERT INTO transactions (id, block_index, token_id, district_id, payload_json)
-          VALUES (${item.id}, ${block.index}, ${item.tokenId}, ${item.districtId}, ${tx.json(toDatabaseJson(item))})`;
+          VALUES (${item.id}, ${block.index}, ${item.tokenId}, ${item.districtId}, ${toDatabaseJson(item)})`;
       }
 
       if (tokenRows.length > 0) {
@@ -112,10 +120,10 @@ export const storage = {
   async saveBlock(block: Block): Promise<void> {
     await client.begin(async (tx) => {
       await tx`INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
-        VALUES (${block.index}, ${block.districtId}, ${new Date(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${tx.json(toDatabaseJson(block))})`;
+        VALUES (${block.index}, ${block.districtId}, ${toPostgresTimestamp(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${toDatabaseJson(block)})`;
       for (const item of block.transactions) {
         await tx`INSERT INTO transactions (id, block_index, token_id, district_id, payload_json)
-          VALUES (${item.id}, ${block.index}, ${item.tokenId}, ${item.districtId}, ${tx.json(toDatabaseJson(item))})`;
+          VALUES (${item.id}, ${block.index}, ${item.tokenId}, ${item.districtId}, ${toDatabaseJson(item)})`;
       }
     });
   },
@@ -124,7 +132,7 @@ export const storage = {
     if (!rows[0]) return false;
     const block = rows[0].payload_json as Block;
     block.districtId = `${block.districtId}-TAMPERED`;
-    await client`UPDATE blocks SET payload_json = ${client.json(toDatabaseJson(block))} WHERE block_index = ${index}`;
+    await client`UPDATE blocks SET payload_json = ${toDatabaseJson(block)} WHERE block_index = ${index}`;
     return true;
   },
   async reset(): Promise<void> {
