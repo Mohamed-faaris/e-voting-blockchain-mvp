@@ -12,7 +12,12 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:3000",
       "/chain": "http://localhost:3000",
-      "/demo": "http://localhost:3000"
+      "/demo": "http://localhost:3000",
+      "/face-api": {
+        target: "http://127.0.0.1:8765",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/face-api/, "")
+      }
     }
   }
 });
