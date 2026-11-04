@@ -10,7 +10,8 @@ The OAK-D Lite is controlled **directly by the Python service through the Luxoni
 - Stereo: left/right mono sensors feed StereoDepth.
 - Depth: aligned to the RGB camera and emitted in millimetres.
 - Synchronization: DepthAI Sync node groups RGB and depth frames by device timestamps.
-- The Python service owns the camera connection and exposes the stream over its existing FastAPI endpoints.
+- The face service owns exactly one camera connection and publishes RGB, left/right mono, rectified stereo, disparity and depth previews from that same pipeline.
+- Face enrollment and verification consume the synchronized RGB/depth pair; diagnostic previews never open a second DepthAI device handle.
 
 There is no OAK bridge process, UVC virtual camera, /dev/video10 dependency, or Unix depth socket.
 
@@ -89,7 +90,9 @@ If the OAK device cannot be opened, the service reports the DepthAI error and th
 - GET /health — service, model and direct DepthAI camera status.
 - GET /camera/oak/status — device identity, SDK version, RGB/depth availability, alignment and synchronization status.
 - GET /camera/oak/stream.mjpg — raw live RGB stream captured directly from DepthAI (face boxes are drawn by the Admin browser).
-- GET /camera/oak/snapshot — one annotated OAK RGB frame.
+- GET /camera/oak/snapshot — one OAK RGB frame.
+- GET /camera/oak/streams/status — readiness and sequence counters for all seven preview streams.
+- GET /camera/oak/streams/{name}.jpg — latest JPEG for rgb, left, right, rectified_left, rectified_right, disparity or depth.
 - GET /face/status — local enrollment status.
 - POST /face/enroll — enroll from a webcam base64 image or direct OAK capture.
 - POST /face/verify — verify from a webcam base64 image or direct OAK capture.
@@ -127,7 +130,7 @@ curl -s http://127.0.0.1:8765/camera/oak/status | python -m json.tool
 
 The standalone test requests ten synchronized RGB/depth frames and saves oak_rgb_test.jpg plus oak_depth_test.png. Run it with the OAK-D Lite connected; it does not start FastAPI.
 
-The status endpoint waits for a synchronized RGB/depth frame. Check the returned error field if ready is false.
+The camera status endpoint waits for a synchronized RGB/depth frame. The streams status endpoint reports per-stream readiness. Preview JPEGs are generated from the same capture loop; no separate stream-server process is needed.
 
 Common causes:
 
