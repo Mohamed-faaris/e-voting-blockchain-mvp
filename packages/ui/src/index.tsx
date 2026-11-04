@@ -20,7 +20,7 @@ export function WorkspaceShell({
   const groups = [...new Set(navItems.map((item) => item.group))];
 
   return (
-    <div className="ev-shell">
+    <div className={`ev-shell${navItems.length === 0 ? " ev-shell-simple" : ""}`}>
       <aside className="ev-sidebar">
         <div className="ev-brand">
           <div className="ev-brand-mark"><ShieldCheck size={19} /></div>
@@ -57,8 +57,8 @@ export function WorkspaceShell({
       <section className="ev-workspace">
         <header className="ev-topbar">
           <div>
-            <div className="ev-topbar-title">Election workspace</div>
-            <div className="ev-topbar-subtitle">Operations · Audit · Public verification</div>
+            <div className="ev-topbar-title">{brand}</div>
+            <div className="ev-topbar-subtitle">Operations · audit · public verification</div>
           </div>
           <div className="ev-top-actions">
             {topbarExtra}

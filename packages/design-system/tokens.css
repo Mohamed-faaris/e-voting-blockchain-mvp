@@ -1,3 +1,4 @@
+/* Visual audit informed by Unslop by Damir Sokolovsky, CC BY 4.0. */
 :root {
   color-scheme: light;
   --ev-bg: #f7f6f2;
@@ -38,6 +39,8 @@ a { color: inherit; }
   grid-template-columns: 248px minmax(0, 1fr);
   background: var(--ev-bg);
 }
+.ev-shell-simple { grid-template-columns: minmax(0, 1fr); }
+.ev-shell-simple .ev-sidebar { display: none; }
 .ev-sidebar {
   position: sticky;
   top: 0;
