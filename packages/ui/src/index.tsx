@@ -1,19 +1,149 @@
 import type { ReactNode } from "react";
-import { ShieldCheck,X,type LucideIcon } from "lucide-react";
-export interface NavItem { label:string; path:string; icon:LucideIcon; group:string }
-export interface WorkspaceShellProps { brand:string; tagline:string; activePath:string; navItems:NavItem[]; onNavigate:(path:string)=>void; children:ReactNode; notice?:{message:string;type:"ok"|"err"}|null; onDismissNotice?:()=>void; topbarExtra?:ReactNode }
-export function WorkspaceShell({brand,tagline,activePath,navItems,onNavigate,children,notice,onDismissNotice,topbarExtra}:WorkspaceShellProps){
- const groups=[...new Set(navItems.map((item)=>item.group))];
- return <div className="ev-shell"><aside className="ev-sidebar"><div className="ev-brand"><div className="ev-brand-mark"><ShieldCheck size={19}/></div><div><strong>{brand}</strong><small>{tagline}</small></div></div>
- <nav aria-label="Workspace navigation">{groups.map((group)=><div className="ev-nav-group" key={group}><div className="ev-nav-label">{group}</div>{navItems.filter((item)=>item.group===group).map((item)=>{const Icon=item.icon;return <button className={`ev-nav-link${activePath===item.path?" active":""}`} key={item.path} type="button" onClick={()=>onNavigate(item.path)} aria-current={activePath===item.path?"page":undefined}><Icon size={16} strokeWidth={1.8}/><span>{item.label}</span></button>})}</div>)}</nav>
- <div className="ev-sidebar-foot"><strong style={{color:"white"}}>Prototype environment</strong><br/>Cryptographic and district-sync flows are simulated. Never use live voter information.</div></aside>
- <section className="ev-workspace"><header className="ev-topbar"><div><div className="ev-topbar-title">Election workspace</div><div className="ev-topbar-subtitle">Operations · Audit · Public verification</div></div><div className="ev-top-actions">{topbarExtra}<span className="ev-env"><span className="ev-env-dot"/> DEMO ONLY</span></div></header>
- <main className="ev-main">{notice&&<div className={`ev-notice ${notice.type}`} role="status"><span>{notice.message}</span>{onDismissNotice&&<button type="button" onClick={onDismissNotice} aria-label="Dismiss notification"><X size={15}/></button>}</div>}{children}</main></section></div>;
+import { ShieldCheck, X, type LucideIcon } from "lucide-react";
+
+export interface NavItem { label: string; path: string; icon: LucideIcon; group: string }
+export interface WorkspaceShellProps {
+  brand: string;
+  tagline: string;
+  activePath: string;
+  navItems: NavItem[];
+  onNavigate: (path: string) => void;
+  children: ReactNode;
+  notice?: { message: string; type: "ok" | "err" } | null;
+  onDismissNotice?: () => void;
+  topbarExtra?: ReactNode;
 }
-export function PageHeader({eyebrow,title,description,action}:{eyebrow?:string;title:string;description?:string;action?:ReactNode}){return <div className="ev-page-head"><div>{eyebrow&&<div className="ev-nav-label" style={{padding:0,color:"var(--ev-primary)",marginBottom:7}}>{eyebrow}</div>}<h1>{title}</h1>{description&&<p>{description}</p>}</div>{action}</div>}
-export function MetricCard({label,value,note,tone="default"}:{label:string;value:ReactNode;note?:string;tone?:"default"|"success"|"warning"}){return <article className="ev-metric"><div className="ev-metric-label">{label}</div><div className="ev-metric-value" style={{color:tone==="success"?"var(--ev-success)":tone==="warning"?"var(--ev-warning)":undefined}}>{value}</div>{note&&<div className="ev-metric-note">{note}</div>}</article>}
-export function Panel({title,description,children,action}:{title:string;description?:string;children:ReactNode;action?:ReactNode}){return <section className="ev-card ev-stack"><div className="ev-row" style={{justifyContent:"space-between"}}><div><h2 className="ev-card-title">{title}</h2>{description&&<p className="ev-card-copy">{description}</p>}</div>{action}</div>{children}</section>}
-export function StatusPill({children,tone="default"}:{children:ReactNode;tone?:"default"|"success"|"warning"|"danger"}){return <span className={`ev-pill ${tone}`}>{children}</span>}
-export function ErrorNotice({children}:{children:ReactNode}){return <div className="ev-notice err" role="alert">{children}</div>}
-export function LoadingState({label="Loading data…"}:{label?:string}){return <div className="ev-empty" role="status">{label}</div>}
-export function EmptyState({title,description}:{title:string;description?:string}){return <div className="ev-empty"><strong style={{color:"var(--ev-text)"}}>{title}</strong>{description&&<div style={{marginTop:6}}>{description}</div>}</div>}
+
+export function WorkspaceShell({
+  brand, tagline, activePath, navItems, onNavigate, children, notice, onDismissNotice, topbarExtra
+}: WorkspaceShellProps) {
+  const groups = [...new Set(navItems.map((item) => item.group))];
+
+  return (
+    <div className={`ev-shell${navItems.length === 0 ? " ev-shell-simple" : ""}`}>
+      <aside className="ev-sidebar">
+        <div className="ev-brand">
+          <div className="ev-brand-mark"><ShieldCheck size={19} /></div>
+          <div><strong>{brand}</strong><small>{tagline}</small></div>
+        </div>
+        <nav aria-label="Workspace navigation">
+          {groups.map((group) => (
+            <div className="ev-nav-group" key={group}>
+              <div className="ev-nav-label">{group}</div>
+              {navItems.filter((item) => item.group === group).map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    className={`ev-nav-link${activePath === item.path ? " active" : ""}`}
+                    key={item.path}
+                    type="button"
+                    onClick={() => onNavigate(item.path)}
+                    aria-current={activePath === item.path ? "page" : undefined}
+                  >
+                    <Icon size={16} strokeWidth={1.8} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div className="ev-sidebar-foot">
+          <strong style={{ color: "var(--ev-text)" }}>Prototype environment</strong>
+          <br />
+          Cryptographic and district-sync flows are simulated. Never use live voter information.
+        </div>
+      </aside>
+      <section className="ev-workspace">
+        <header className="ev-topbar">
+          <div>
+            <div className="ev-topbar-title">{brand}</div>
+            <div className="ev-topbar-subtitle">Operations · audit · public verification</div>
+          </div>
+          <div className="ev-top-actions">
+            {topbarExtra}
+            <span className="ev-env"><span className="ev-env-dot" />Demo environment</span>
+          </div>
+        </header>
+        <main className="ev-main">
+          {notice && (
+            <div className={`ev-notice ${notice.type}`} role="status">
+              <span>{notice.message}</span>
+              {onDismissNotice && (
+                <button type="button" onClick={onDismissNotice} aria-label="Dismiss notification"><X size={15} /></button>
+              )}
+            </div>
+          )}
+          {children}
+        </main>
+      </section>
+    </div>
+  );
+}
+
+export function PageHeader({ eyebrow, title, description, action }: {
+  eyebrow?: string; title: string; description?: string; action?: ReactNode
+}) {
+  return (
+    <div className="ev-page-head">
+      <div>
+        {eyebrow && <div className="ev-nav-label" style={{ padding: 0, color: "var(--ev-primary)", marginBottom: 7 }}>{eyebrow}</div>}
+        <h1>{title}</h1>
+        {description && <p>{description}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function MetricCard({ label, value, note, tone = "default" }: {
+  label: string; value: ReactNode; note?: string; tone?: "default" | "success" | "warning"
+}) {
+  return (
+    <article className="ev-metric">
+      <div className="ev-metric-label">{label}</div>
+      <div className="ev-metric-value" style={{
+        color: tone === "success" ? "var(--ev-success)" : tone === "warning" ? "var(--ev-warning)" : undefined
+      }}>{value}</div>
+      {note && <div className="ev-metric-note">{note}</div>}
+    </article>
+  );
+}
+
+export function Panel({ title, description, children, action }: {
+  title: string; description?: string; children: ReactNode; action?: ReactNode
+}) {
+  return (
+    <section className="ev-card ev-stack">
+      <div className="ev-row" style={{ justifyContent: "space-between" }}>
+        <div>
+          <h2 className="ev-card-title">{title}</h2>
+          {description && <p className="ev-card-copy">{description}</p>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function StatusPill({ children, tone = "default" }: {
+  children: ReactNode; tone?: "default" | "success" | "warning" | "danger"
+}) {
+  return <span className={`ev-pill ${tone}`}>{children}</span>;
+}
+
+export function ErrorNotice({ children }: { children: ReactNode }) {
+  return <div className="ev-notice err" role="alert">{children}</div>;
+}
+export function LoadingState({ label = "Loading data…" }: { label?: string }) {
+  return <div className="ev-empty" role="status">{label}</div>;
+}
+export function EmptyState({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="ev-empty">
+      <strong style={{ color: "var(--ev-text)" }}>{title}</strong>
+      {description && <div style={{ marginTop: 6 }}>{description}</div>}
+    </div>
+  );
+}

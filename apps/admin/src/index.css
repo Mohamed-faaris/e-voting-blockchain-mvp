@@ -1,2 +1,47 @@
-@import "tailwindcss";@import "@evoting/design-system/tokens.css";
-@layer base{:root{--background:0 0% 100%;--foreground:222.2 84% 4.9%;--card:0 0% 100%;--card-foreground:222.2 84% 4.9%;--primary:221.2 83.2% 53.3%;--primary-foreground:210 40% 98%;--secondary:210 40% 96.1%;--muted:210 40% 96.1%;--muted-foreground:215.4 16.3% 46.9%;--border:214.3 31.8% 91.4%;--radius:.5rem}}body{background:var(--ev-bg);color:var(--ev-text);font-feature-settings:"rlig" 1,"calt" 1}
+@import "tailwindcss";
+@import "@evoting/design-system/tokens.css";
+
+@layer base {
+  :root {
+    --background: 40 18% 98%;
+    --foreground: 60 5% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 60 5% 16%;
+    --primary: 17 41% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 14% 94%;
+    --muted: 40 14% 94%;
+    --muted-foreground: 70 4% 45%;
+    --border: 42 12% 89%;
+    --radius: .5rem;
+  }
+}
+
+body { background: var(--ev-bg); color: var(--ev-text); font-feature-settings: "rlig" 1, "calt" 1; }
+
+/* Legacy Admin pages use Tailwind's blue/indigo utilities. Re-map them to the shared civic palette. */
+.text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900,
+.text-indigo-600, .text-indigo-700, .text-indigo-800, .text-indigo-900 {
+  color: var(--ev-primary) !important;
+}
+.text-indigo-400 { color: var(--ev-primary-strong) !important; }
+.bg-blue-600, .bg-indigo-600 {
+  background-color: var(--ev-primary) !important;
+  color: #fff !important;
+}
+.bg-blue-50, .bg-blue-100, .bg-indigo-50, .bg-indigo-100,
+[class~="bg-blue-50/60"], [class~="bg-blue-50/70"], [class~="bg-indigo-50/70"] {
+  background-color: var(--ev-primary-soft) !important;
+}
+.border-blue-600, .border-indigo-600 { border-color: var(--ev-primary) !important; }
+.border-blue-100, .border-blue-200, .border-indigo-100, .border-indigo-200, .border-indigo-300 {
+  border-color: var(--ev-border-strong) !important;
+}
+.hover\:bg-blue-700:hover, .hover\:bg-indigo-700:hover {
+  background-color: var(--ev-primary-strong) !important;
+}
+.focus\:border-blue-500:focus, .focus\:border-indigo-500:focus {
+  border-color: var(--ev-primary) !important;
+}
+.ring-blue-500 { --tw-ring-color: var(--ev-primary) !important; }
+.bg-linear-to-r { background-image: none !important; }
