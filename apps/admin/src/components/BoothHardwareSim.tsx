@@ -7,13 +7,17 @@ import { FaceVerificationPanel } from "./FaceVerificationPanel";
 interface BoothHardwareSimProps {
   onCardTapped: (voterId: string) => void;
   onLivenessVerified: () => void;
+  onFaceModeChange?: (enabled: boolean) => void;
 }
 
 export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
   onCardTapped,
-  onLivenessVerified
+  onLivenessVerified,
+  onFaceModeChange
 }) => {
   const [rfidActive, setRfidActive] = useState(false);
+  const [faceCheckEnabled, setFaceCheckEnabled] = useState(false);
+  const [pendingVoterId, setPendingVoterId] = useState<string | null>(null);
   const [activeCard, setActiveCard] = useState<string | null>(null);
   const [demoCards, setDemoCards] = useState<Voter[]>([]);
   const [loadingCards, setLoadingCards] = useState(true);
@@ -38,8 +42,31 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
     setActiveCard(card.voterId);
     window.setTimeout(() => {
       setRfidActive(false);
-      onCardTapped(card.voterId);
+      if (faceCheckEnabled) setPendingVoterId(card.voterId);
+      else onCardTapped(card.voterId);
     }, 400);
+  };
+
+  const handleFaceVerified = () => {
+    if (!pendingVoterId) return;
+    onLivenessVerified();
+    onCardTapped(pendingVoterId);
+    setPendingVoterId(null);
+  };
+
+  const handleFaceBypass = () => {
+    if (!pendingVoterId) return;
+    onCardTapped(pendingVoterId);
+    setPendingVoterId(null);
+  };
+
+  const handleFaceModeChange = (enabled: boolean) => {
+    setFaceCheckEnabled(enabled);
+    onFaceModeChange?.(enabled);
+    if (!enabled && pendingVoterId) {
+      onCardTapped(pendingVoterId);
+      setPendingVoterId(null);
+    }
   };
 
   return (
@@ -98,7 +125,16 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
         </div>
       </div>
 
-      <FaceVerificationPanel onVerified={onLivenessVerified} />
+      {pendingVoterId && (
+        <p className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
+          Smartcard read for <strong>{pendingVoterId}</strong>. Verify the enrolled face below to continue, or use the explicit fallback if the camera/service is unavailable.
+        </p>
+      )}
+      <FaceVerificationPanel
+        onVerified={handleFaceVerified}
+        onEnabledChange={handleFaceModeChange}
+        onBypass={handleFaceBypass}
+      />
     </div>
   );
 };
