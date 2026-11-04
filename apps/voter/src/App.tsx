@@ -18,6 +18,7 @@ export function App() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [candidateId, setCandidateId] = useState("");
   const [receipt, setReceipt] = useState<VoteReceipt | null>(null);
+  const [completedVote, setCompletedVote] = useState<{ voter: Voter; candidate: Candidate } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,6 +46,7 @@ export function App() {
       const result = await api.authenticateVoter(voterId.trim());
       setSession(result);
       setReceipt(null);
+      setCompletedVote(null);
       setCandidateId("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Authentication failed");
@@ -58,6 +60,9 @@ export function App() {
     setLoading(true);
     setError("");
     try {
+      const selectedCandidate = candidates.find((candidate) => candidate.id === candidateId);
+      if (!selectedCandidate) throw new Error("The selected candidate is no longer available.");
+
       const result = await api.castVote({
         districtId: session.voter.districtId,
         tokenId: session.token.tokenId,
@@ -66,6 +71,7 @@ export function App() {
         privateKey: session.token.privateKey
       });
       setReceipt(result.receipt);
+      setCompletedVote({ voter: session.voter, candidate: selectedCandidate });
       setAvailableVoters((current) => current.filter((voter) => voter.voterId !== session.voter.voterId));
       setSession(null);
     } catch (cause) {
@@ -78,6 +84,7 @@ export function App() {
   function reset() {
     setSession(null);
     setReceipt(null);
+    setCompletedVote(null);
     setCandidateId("");
     setVoterId(availableVoters[0]?.voterId ?? "");
     setError("");
@@ -217,28 +224,49 @@ export function App() {
 
         {receipt && (
           <Panel
-            title="Ballot receipt"
-            description="Block and transaction references returned by the API."
-            action={<StatusPill tone="success">Recorded</StatusPill>}
+            title="Vote Successfully Recorded"
+            description="Your demo ballot has been accepted and added to the Civic Ledger."
+            action={<StatusPill tone="success">Success · Recorded</StatusPill>}
           >
-            <div className="ev-row">
-              <CheckCircle2 color="var(--ev-success)" />
-              <strong>Ballot recorded in block #{receipt.blockIndex}</strong>
+            <div className="ev-alert" style={{ borderColor: "var(--ev-success)", background: "var(--ev-success-soft, #ecfdf5)" }}>
+              <div className="ev-row" style={{ alignItems: "center", gap: 10 }}>
+                <CheckCircle2 color="var(--ev-success)" size={24} />
+                <div>
+                  <strong style={{ display: "block" }}>Voting completed successfully</strong>
+                  <span className="ev-muted">The API confirmed that your ballot was recorded.</span>
+                </div>
+              </div>
             </div>
+
             <div className="ev-stack">
               <div>
-                <div className="ev-metric-label">Block hash</div>
-                <div className="ev-mono">{receipt.blockHash}</div>
+                <div className="ev-metric-label">Voter details</div>
+                <strong>{completedVote?.voter.name ?? "Demo voter"}</strong>
+                <div className="ev-mono">{completedVote?.voter.voterId ?? "—"}</div>
+                <small className="ev-muted">District: {completedVote?.voter.districtId ?? "—"}</small>
               </div>
+
               <div>
-                <div className="ev-metric-label">Transaction ID</div>
-                <div className="ev-mono">{receipt.transactionId}</div>
+                <div className="ev-metric-label">Selected candidate</div>
+                <strong>{completedVote?.candidate.name ?? "—"}</strong>
+                <div className="ev-muted">{completedVote?.candidate.party ?? "—"} · Symbol: {completedVote?.candidate.symbol ?? "—"}</div>
               </div>
+
               <div>
-                <div className="ev-metric-label">Timestamp</div>
-                {new Date(receipt.timestamp).toLocaleString()}
+                <div className="ev-metric-label">Ledger confirmation</div>
+                <strong>Block #{receipt.blockIndex}</strong>
+                <div className="ev-metric-label" style={{ marginTop: 8 }}>Block hash</div>
+                <div className="ev-mono" style={{ overflowWrap: "anywhere" }}>{receipt.blockHash}</div>
+                <div className="ev-metric-label" style={{ marginTop: 8 }}>Transaction ID</div>
+                <div className="ev-mono" style={{ overflowWrap: "anywhere" }}>{receipt.transactionId}</div>
+              </div>
+
+              <div>
+                <div className="ev-metric-label">Recorded at</div>
+                <strong>{new Date(receipt.timestamp).toLocaleString()}</strong>
               </div>
             </div>
+
             <button className="ev-button secondary" onClick={reset}>
               <RotateCcw size={15} /> Start next demo session
             </button>
