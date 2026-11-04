@@ -414,21 +414,29 @@ def oak_camera_snapshot():
         capture.release()
 
 
-def oak_mjpeg_generator():
-    capture = open_oak_rgb()
+def oak_mjpeg_generator(capture: cv2.VideoCapture):
+    """Yield frames from an already-open camera; release it on disconnect or failure."""
     frame_delay = 1.0 / OAK_STREAM_FPS
     try:
         while True:
             started = time.monotonic()
             ok, frame = capture.read()
             if not ok or frame is None:
-                time.sleep(0.1)
-                continue
+                # Do not keep an HTTP stream alive forever after the camera disappears.
+                error_frame = np.zeros((240, 640, 3), dtype=np.uint8)
+                cv2.putText(error_frame, "OAK RGB FRAME UNAVAILABLE", (18, 120),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                ok, encoded = cv2.imencode(".jpg", error_frame)
+                if ok:
+                    yield (b"--frame\\r\\nContent-Type: image/jpeg\\r\\nCache-Control: no-store\\r\\n\\r\\n" + encoded.tobytes() + b"\\r\\n")
+                break
             try:
                 annotated = annotated_oak_frame(frame)
-            except HTTPException:
+            except Exception as exc:
+                # Keep the video useful if model loading/inference fails; surface the error on-frame.
                 annotated = frame
-                cv2.putText(annotated, "FACE MODELS UNAVAILABLE", (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+                cv2.putText(annotated, f"FACE ANALYSIS ERROR: {str(exc)[:70]}", (12, 28),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 0, 255), 2)
             ok, encoded = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if ok:
                 yield (b"--frame\\r\\nContent-Type: image/jpeg\\r\\nCache-Control: no-store\\r\\n\\r\\n" + encoded.tobytes() + b"\\r\\n")
@@ -441,9 +449,10 @@ def oak_mjpeg_generator():
 
 @app.get("/camera/oak/stream.mjpg")
 def oak_camera_stream():
-    # Each viewer gets its own capture handle. Close the browser stream to release it.
+    # Open before StreamingResponse sends headers so camera errors become normal HTTP 503 responses.
+    capture = open_oak_rgb()
     return StreamingResponse(
-        oak_mjpeg_generator(),
+        oak_mjpeg_generator(capture),
         media_type="multipart/x-mixed-replace; boundary=frame",
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
     )
