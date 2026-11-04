@@ -110,8 +110,11 @@ Check the camera independently from the face-recognition models:
 
 ~~~bash
 uv run python -c "import depthai as dai; print('DepthAI', dai.__version__); print(dai.Device.getAllAvailableDevices())"
+uv run python oak_camera_test.py
 curl -s http://127.0.0.1:8765/camera/oak/status | python -m json.tool
 ~~~
+
+The standalone test requests ten synchronized RGB/depth frames and saves oak_rgb_test.jpg plus oak_depth_test.png. Run it with the OAK-D Lite connected; it does not start FastAPI.
 
 The status endpoint waits for a synchronized RGB/depth frame. Check the returned error field if ready is false.
 
