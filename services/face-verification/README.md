@@ -4,96 +4,103 @@ Optional local face enrollment and matching for the Civic Ledger booth prototype
 
 ## Camera architecture
 
-The OAK-D Lite is controlled **directly by the Python service through the Luxonis DepthAI SDK**.
+The OAK-D Lite is owned exclusively by **services/depthai-stream-server**. The face-verification service does not open a DepthAI device and does not create a second camera pipeline.
 
-- RGB: OAK-D Lite CAM_A (640×480).
-- Stereo: left/right mono sensors feed StereoDepth.
-- Depth: aligned to the RGB camera and emitted in millimetres.
-- Synchronization: DepthAI Sync node groups RGB and depth frames by device timestamps.
-- The Python service owns the camera connection and exposes the stream over its existing FastAPI endpoints.
+- The DepthAI Stream Server uses the working Luxonis DepthAI v2 pipeline and owns the USB device.
+- RGB comes from `GET /streams/rgb.jpg`.
+- Stereo depth comes from `GET /api/frame/depth.png`, a lossless 16-bit PNG containing depth in millimetres.
+- StereoDepth aligns depth to RGB / CAM_A.
+- The face service reads frames over loopback HTTP using `DEPTHAI_STREAM_SERVER_URL` (default `http://127.0.0.1:8090`).
+- The existing Admin MJPEG route is retained as an adapter over the stream server's RGB JPEG endpoint.
+- No UVC virtual camera, `/dev/video10`, Unix socket, or second DepthAI device owner is used.
 
-There is no OAK bridge process, UVC virtual camera, /dev/video10 dependency, or Unix depth socket.
+The stream server's browser preview may colorize depth for visualization. Face verification uses the raw 16-bit depth endpoint, never the colorized preview.
 
-The regular webcam remains a separate browser-camera option. Selecting OAK-D Lite does not use browser camera enumeration or getUserMedia().
+## Start both services
 
-## Browser-side face bounding boxes
+Keep the OAK-D Lite connected to the same machine. Start the DepthAI device owner first:
 
-The Admin panel uses the existing @vladmandic/face-api dependency and Tiny Face Detector in the browser.
+~~~bash
+cd services/depthai-stream-server
+uv sync
+uv run uvicorn server:app --host 127.0.0.1 --port 8090
+~~~
 
-- The same JavaScript detector processes the selected webcam video or the raw OAK MJPEG image.
-- A transparent canvas draws green face boxes and confidence percentages over the preview.
-- Model weights are copied from the installed npm package into the Vite public directory before Admin dev/build starts. The model is served locally from /models; the browser does not download model files from a third-party host at runtime.
-- The Python service sends unannotated OAK RGB frames. Face-box rendering is not performed by OpenCV in the service.
-- Browser face detection is a visual overlay only. The Python service's face matching and OAK stereo-depth check remain separate verification steps.
+Check its status and open its camera dashboard:
 
+- Dashboard: http://127.0.0.1:8090/
+- Status: http://127.0.0.1:8090/api/status
+- Raw RGB JPEG: http://127.0.0.1:8090/streams/rgb.jpg
+- Raw 16-bit depth PNG: http://127.0.0.1:8090/api/frame/depth.png
 
-## Face verification
-
-- OpenCV YuNet detects faces.
-- OpenCV SFace creates the face embedding and compares it with the locally enrolled template.
-- One face template is stored in SQLite under ~/.local/share/civic-ledger-face/ by default.
-- Captured frames are processed in memory and are not retained.
-- OAK verification uses the RGB frame and its synchronized, RGB-aligned stereo-depth frame from the same DepthAI message group.
-- Face verification remains optional; the existing non-biometric booth flow remains available.
-
-This is a prototype feature, not certified biometric authentication or production election security. Stereo facial-shape checks are heuristics and do not guarantee rejection of photographs, videos, displays or masks.
-
-## Requirements
-
-- Ubuntu/Linux with USB access to an OAK-D Lite.
-- Python 3.10+.
-- uv for dependency and environment management.
-- USB data cable and the Luxonis Linux USB permissions/udev configuration.
-
-### DepthAI version
-
-The project pins depthai==2.32.0.0 and uses the DepthAI v2 pipeline API for the OAK-D Lite (RVC2).
-
-This is a deliberate compatibility choice: a Luxonis issue report from August 2026 documents an OAK-D Lite stereo-camera failure with DepthAI 3.8 and reports the same device working with 2.32.0.0. This report is a device/version-specific compatibility signal, not a guarantee for every OAK-D Lite revision. See [Luxonis issue #1252](https://github.com/luxonis/depthai/issues/1252) and the [DepthAI v2 Python repository](https://github.com/luxonis/depthai-python).
-
-Do not upgrade this service to DepthAI v3 without repeating the RGB + stereo test on the actual OAK-D Lite.
-
-## Install and run
-
-From the repository root:
+Then start face verification in a second terminal:
 
 ~~~bash
 cd services/face-verification
-uv lock
 uv sync
 uv run python download_models.py
 uv run uvicorn app:app --host 127.0.0.1 --port 8765
 ~~~
 
-Run uv lock after pulling this branch so the lockfile resolves the pinned DepthAI v2.32.0.0 dependency. The service binds to loopback only. Model files are downloaded into models/ and are intentionally not committed. The default local data directory is owner-only (0700) and the SQLite database is owner-only (0600) where supported.
+The face service binds to loopback only. To use a different stream-server address, set `DEPTHAI_STREAM_SERVER_URL` before starting it.
 
-Connect the OAK-D Lite directly to the booth machine before starting the OAK camera. On Linux, make sure the current user has USB access according to the [Luxonis installation instructions](https://docs.luxonis.com/software/depthai/).
+## Browser-side face bounding boxes
+
+The Admin panel uses the existing `@vladmandic/face-api` dependency and Tiny Face Detector in the browser.
+
+- The same JavaScript detector processes the selected webcam video or the raw OAK MJPEG image.
+- A transparent canvas draws green face boxes and confidence percentages over the preview.
+- Model weights are copied from the installed npm package into the Vite public directory before Admin dev/build starts.
+- The Python face service sends unannotated OAK RGB frames. Face-box rendering is handled by browser JavaScript.
+- Browser face detection is a visual overlay only. Python face matching and the stereo-depth heuristic are separate verification steps.
+
+## Face verification
+
+- OpenCV YuNet detects faces.
+- OpenCV SFace creates the face embedding and compares it with the locally enrolled template.
+- One face template is stored in SQLite under `~/.local/share/civic-ledger-face/` by default.
+- Captured frames are processed in memory and are not retained.
+- OAK enrollment and verification fetch RGB directly from the DepthAI Stream Server.
+- When depth checking is requested, the face service fetches the aligned 16-bit depth PNG and evaluates the detected face region.
+- Webcam mode uses the browser-provided base64 JPEG and does not have stereo depth.
+
+The depth-based facial-shape check is a heuristic. It is not certified liveness detection and cannot guarantee rejection of photographs, videos, displays, masks, or other presentation attacks. The stream server polls RGB and depth queues independently; the pair is not hardware timestamp-synchronized.
 
 ## Admin workflow
 
-1. Start the local FastAPI face service.
-2. Open Admin → Voter Check-in.
-3. Enable optional face verification.
-4. Select **OAK-D Lite (DepthAI direct RGB + stereo depth)**.
-5. Select **Start camera**. The Python service discovers the OAK device, starts the RGB/stereo pipeline and displays its MJPEG stream in the Admin panel.
-6. Register the administrator-approved face, then use **Verify enrolled face** when required.
-7. For OAK mode, the browser sends only camera_source: "oak". The Python service captures a synchronized RGB/depth pair directly from DepthAI; the browser does not capture the OAK image.
+1. Start `services/depthai-stream-server`.
+2. Confirm RGB and depth are ready at `http://127.0.0.1:8090/api/status`.
+3. Start the local face-verification service.
+4. Open Admin → Voter Check-in.
+5. Enable optional face verification.
+6. Select **OAK-D Lite (DepthAI direct RGB + stereo depth)** and start the camera.
+7. Register the approved face, then select **Verify enrolled face** when required.
 
-For a standard webcam, the browser still captures the image and sends its base64 JPEG to the service. Webcam mode does not perform stereo-depth checks.
+The browser receives the preview through the face service's existing MJPEG route. When enrollment or verification selects OAK, the face service fetches the latest RGB frame from the stream server. A depth frame is fetched only when `check_depth: true`.
 
-If the OAK device cannot be opened, the service reports the DepthAI error and the booth offers its existing explicit non-biometric fallback.
+For a standard webcam, the browser captures the image and sends its base64 JPEG to the face service. The webcam path does not connect to the OAK device.
 
 ## API
 
-- GET / — local diagnostic dashboard.
-- GET /health — service, model and direct DepthAI camera status.
-- GET /camera/oak/status — device identity, SDK version, RGB/depth availability, alignment and synchronization status.
-- GET /camera/oak/stream.mjpg — raw live RGB stream captured directly from DepthAI (face boxes are drawn by the Admin browser).
-- GET /camera/oak/snapshot — one annotated OAK RGB frame.
-- GET /face/status — local enrollment status.
-- POST /face/enroll — enroll from a webcam base64 image or direct OAK capture.
-- POST /face/verify — verify from a webcam base64 image or direct OAK capture.
-- DELETE /face/enrollment — delete the local face template.
+Face-verification service:
+
+- `GET /` — local diagnostic dashboard.
+- `GET /health` — face models, local enrollment and upstream OAK status.
+- `GET /camera/oak/status` — separate RGB and stereo-depth availability.
+- `GET /camera/oak/stream.mjpg` — MJPEG adapter over the stream-server RGB JPEG.
+- `GET /camera/oak/snapshot` — latest RGB JPEG.
+- `GET /face/status` — local enrollment status.
+- `POST /face/enroll` — enroll from webcam image or OAK RGB frame.
+- `POST /face/verify` — verify from webcam image or OAK RGB frame; optional raw depth check.
+- `DELETE /face/enrollment` — delete the local face template.
+
+DepthAI Stream Server:
+
+- `GET /api/status` — device and per-stream availability.
+- `POST /api/reconnect` — reconnect the OAK device.
+- `GET /streams/rgb.jpg` — latest RGB JPEG frame.
+- `GET /api/frame/depth.png` — latest aligned 16-bit depth frame, in millimetres.
+- `GET /streams/{name}.jpg` — latest colorized/preview JPEG for supported streams.
 
 Example OAK enrollment request:
 
@@ -104,7 +111,7 @@ Example OAK enrollment request:
 }
 ~~~
 
-Example OAK verification request:
+Example OAK verification request with the raw depth check enabled:
 
 ~~~json
 {
@@ -113,29 +120,35 @@ Example OAK verification request:
 }
 ~~~
 
-Webcam requests continue to use image with a base64-encoded JPEG and camera_source: "webcam".
+Webcam requests continue to use `image` with a base64-encoded JPEG and `camera_source: "webcam"`.
 
 ## Troubleshooting
 
-Check the camera independently from the face-recognition models:
+Run these checks in order:
 
 ~~~bash
-uv run python -c "import depthai as dai; print('DepthAI', dai.__version__); print(dai.Device.getAllAvailableDevices())"
-uv run python oak_camera_test.py
+# 1. Verify the OAK device owner is producing frames.
+curl -s http://127.0.0.1:8090/api/status | python -m json.tool
+
+# 2. Verify the RGB stream returns a JPEG.
+curl -f http://127.0.0.1:8090/streams/rgb.jpg -o /tmp/oak-rgb.jpg
+
+# 3. Verify raw depth is a 16-bit PNG.
+curl -f http://127.0.0.1:8090/api/frame/depth.png -o /tmp/oak-depth.png
+file /tmp/oak-depth.png
+
+# 4. Verify the face service can reach the stream server.
 curl -s http://127.0.0.1:8765/camera/oak/status | python -m json.tool
 ~~~
 
-The standalone test requests ten synchronized RGB/depth frames and saves oak_rgb_test.jpg plus oak_depth_test.png. Run it with the OAK-D Lite connected; it does not start FastAPI.
-
-The status endpoint waits for a synchronized RGB/depth frame. Check the returned error field if ready is false.
-
 Common causes:
 
-- **No device detected:** check USB data cable, USB port, device power and Linux udev permissions.
-- **Permission denied:** configure the Luxonis USB udev rules and reconnect the camera.
-- **Pipeline or firmware failure:** retain the pinned DepthAI 2.32.0.0 version and capture the Python error plus device crash dump.
-- **RGB works but depth does not:** verify the OAK stereo cameras are visible and that the device is an OAK-D Lite with stereo sensors.
-- **Depth does not align:** this pipeline configures StereoDepth alignment to CAM_A and emits the depth map at the RGB output size. The backend checks that RGB/depth dimensions match before using them.
+- **RGB unavailable:** check the stream-server `rgb_available` field, USB data cable, USB port, device power and udev permissions.
+- **Depth unavailable while RGB works:** inspect the stream-server `depth_available` field and the mono/stereo camera queues.
+- **Face service reports upstream unavailable:** start the DepthAI Stream Server on port 8090 or set the correct `DEPTHAI_STREAM_SERVER_URL`.
+- **Depth check fails:** verify the raw depth PNG is 16-bit, aligned to CAM_A, and contains valid non-zero measurements over the face region.
 - **No face detected:** improve lighting, keep one face in frame and move closer to the camera.
 
-Do not use this prototype as the only safeguard for a real election. Keep the booth machine physically secured and protect the local OS account and face-template database.
+Do not expose either local development service publicly. The stream server has no authentication or TLS. Keep the booth machine physically secured and protect the local OS account and face-template database.
+
+This is a prototype feature, not certified biometric authentication or production election security.
