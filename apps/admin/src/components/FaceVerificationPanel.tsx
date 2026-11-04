@@ -24,7 +24,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export function FaceVerificationPanel() {
+export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [devices, setDevices] = useState<CameraDevice[]>([]);
@@ -59,8 +59,6 @@ export function FaceVerificationPanel() {
 
   const refreshCameras = useCallback(async () => {
     try {
-      const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      permissionStream.getTracks().forEach((track) => track.stop());
       const list = await navigator.mediaDevices.enumerateDevices();
       const cameras = list.filter((device) => device.kind === "videoinput").map((device, index) => {
         const label = device.label || `Camera ${index + 1}`;
@@ -93,6 +91,7 @@ export function FaceVerificationPanel() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setCameraReady(true);
+        void refreshCameras();
       }
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : "Could not start selected camera.");
@@ -101,9 +100,12 @@ export function FaceVerificationPanel() {
 
   useEffect(() => {
     void refreshStatus();
-    void refreshCameras();
     return () => stopCamera();
-  }, [refreshStatus, refreshCameras, stopCamera]);
+  }, [refreshStatus, stopCamera]);
+
+  useEffect(() => {
+    if (enabled) void refreshCameras();
+  }, [enabled, refreshCameras]);
 
   const capture = () => {
     const video = videoRef.current;
@@ -153,6 +155,7 @@ export function FaceVerificationPanel() {
       });
       const data = await parseResponse<FaceResult>(response);
       setResult(data);
+      if (data.matched && (data.depth === null || data.depth.passed)) onVerified?.();
     } catch (error) {
       setServiceError(error instanceof Error ? error.message : "Face verification failed.");
     } finally {
