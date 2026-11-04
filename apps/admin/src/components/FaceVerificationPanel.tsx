@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle2, Fingerprint, RefreshCw, ShieldAlert, Trash2, UserRound, Video } from "lucide-react";
+import { CheckCircle2, Fingerprint, RefreshCw, ShieldAlert, Trash2, UserRound, Video } from "lucide-react";
 
 type CameraSource = "webcam" | "oak";
 type CameraDevice = { deviceId: string; label: string; source: CameraSource };
