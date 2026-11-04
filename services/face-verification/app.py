@@ -14,7 +14,7 @@ from typing import Literal
 import cv2
 import numpy as np
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,68 @@ DEPTH_TIMEOUT_SECONDS = float(os.getenv("OAK_DEPTH_TIMEOUT", "1.5"))
 
 DETECTOR_MODEL = MODEL_DIR / "face_detection_yunet_2023mar.onnx"
 RECOGNIZER_MODEL = MODEL_DIR / "face_recognition_sface_2021dec.onnx"
+
+
+DASHBOARD_HTML = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Civic Ledger · Face Service</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121d30;--line:#263750;--muted:#9aabc2;--text:#edf4ff;--green:#34d399;--red:#fb7185;--amber:#fbbf24}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0%,#172b48 0,transparent 35%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:32px 22px 56px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+h1{font-size:25px;margin:0 0 5px}.sub{color:var(--muted)}.pill{border:1px solid var(--line);border-radius:99px;padding:7px 12px;color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(270px,1fr);gap:18px}.panel{background:linear-gradient(145deg,#152238,#101a2b);border:1px solid var(--line);border-radius:16px;padding:18px;min-width:0}
+h2{font-size:15px;margin:0 0 14px}.video{background:#050a12;border:1px solid var(--line);border-radius:11px;overflow:hidden;aspect-ratio:4/3;display:grid;place-items:center}.video img{width:100%;height:100%;object-fit:contain}.hint{color:var(--muted);font-size:12px;margin-top:10px}
+.metrics{display:grid;gap:10px}.metric{padding:12px;border:1px solid var(--line);border-radius:10px;background:#0c1626}.metric span{display:block;color:var(--muted);font-size:11px}.metric strong{display:block;margin-top:4px;font-size:14px;overflow-wrap:anywhere}
+.ok{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--amber)}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+a,button{border:1px solid #365071;background:#1a2b43;color:var(--text);border-radius:9px;padding:9px 12px;text-decoration:none;font:inherit;font-size:12px;cursor:pointer}a:hover,button:hover{background:#263e5e}
+.endpoints{display:grid;gap:9px}.endpoint{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:8px 0}.endpoint code{color:#b8d5ff;font-size:11px}.footer{color:var(--muted);font-size:11px;margin-top:20px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}main{padding:20px 14px}}
+</style>
+</head>
+<body><main>
+<header class="top"><div><h1>Civic Ledger · Face Service</h1><div class="sub">Local camera, face recognition and OAK-D Lite bridge dashboard</div></div><div class="pill" id="overall">Checking service…</div></header>
+<section class="grid">
+<div class="panel"><h2>Live OAK RGB · Face detection</h2><div class="video"><img id="stream" src="/camera/oak/stream.mjpg" alt="OAK RGB live stream with face bounding boxes" onerror="this.style.display='none';document.getElementById('streamError').hidden=false"><div id="streamError" class="sub" hidden>Stream unavailable. Check the OAK RGB device and bridge status.</div></div><div class="hint">YuNet draws face bounding boxes. When a template is enrolled, SFace labels faces ENROLLED or UNKNOWN. This preview is not liveness proof.</div><div class="actions"><button onclick="reloadStream()">Reconnect stream</button><a href="/camera/oak/snapshot" target="_blank" rel="noreferrer">Open snapshot</a><a href="/docs" target="_blank" rel="noreferrer">API docs</a></div></div>
+<div class="panel"><h2>Service status</h2><div class="metrics">
+<div class="metric"><span>FastAPI</span><strong id="apiStatus">Checking…</strong></div>
+<div class="metric"><span>Face models</span><strong id="modelStatus">Checking…</strong></div>
+<div class="metric"><span>Local enrollment</span><strong id="faceStatus">Checking…</strong></div>
+<div class="metric"><span>OAK RGB camera</span><strong id="rgbStatus">Checking…</strong></div>
+<div class="metric"><span>OAK stereo depth</span><strong id="depthStatus">Checking…</strong></div>
+</div><div class="actions"><button onclick="refreshStatus()">Refresh diagnostics</button></div></div>
+<div class="panel"><h2>Camera diagnostics</h2><div class="metrics"><div class="metric"><span>RGB device</span><strong id="rgbDevice">—</strong></div><div class="metric"><span>Depth socket</span><strong id="depthSocket">—</strong></div><div class="metric"><span>Match threshold</span><strong id="threshold">—</strong></div></div></div>
+<div class="panel"><h2>API endpoints</h2><div class="endpoints">
+<div class="endpoint"><code>GET /health</code><a href="/health">Open</a></div>
+<div class="endpoint"><code>GET /face/status</code><a href="/face/status">Open</a></div>
+<div class="endpoint"><code>GET /camera/oak/status</code><a href="/camera/oak/status">Open</a></div>
+<div class="endpoint"><code>GET /camera/oak/stream.mjpg</code><a href="/camera/oak/stream.mjpg" target="_blank">Open</a></div>
+<div class="endpoint"><code>GET /camera/oak/snapshot</code><a href="/camera/oak/snapshot" target="_blank">Open</a></div>
+<div class="endpoint"><code>OpenAPI</code><a href="/openapi.json">JSON</a></div>
+</div></div>
+</section><div class="footer">Runs locally on the booth machine. Face embeddings remain in local SQLite. Recognition and stereo-depth checks are prototype diagnostics, not certified biometric security.</div>
+</main>
+<script>
+async function getJson(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw new Error(path+' returned '+r.status);return r.json()}
+function set(id,text,kind){const e=document.getElementById(id);e.textContent=text;e.className=kind||''}
+async function refreshStatus(){
+try{
+const [health,face,oak]=await Promise.all([getJson('/health'),getJson('/face/status'),getJson('/camera/oak/status')]);
+set('apiStatus','Online','ok');set('modelStatus',health.models_available?'Available':'Missing',health.models_available?'ok':'bad');
+set('faceStatus',face.registered?'One face enrolled':'No face enrolled',face.registered?'ok':'warn');
+set('rgbStatus',oak.rgb.available?'Connected':'Unavailable',oak.rgb.available?'ok':'bad');
+set('depthStatus',oak.depth.available?'Connected':'Unavailable',oak.depth.available?'ok':'bad');
+set('rgbDevice',oak.rgb.device||'—');set('depthSocket',oak.depth.socket||'—');set('threshold',(face.match_threshold*100).toFixed(1)+'%');
+set('overall',oak.ready?'OAK bridge ready':'Service online · bridge needs attention',oak.ready?'ok':'warn');
+}catch(e){set('apiStatus','Unavailable','bad');set('overall','Service or bridge error','bad');console.error(e)}
+}
+function reloadStream(){const img=document.getElementById('stream');document.getElementById('streamError').hidden=true;img.style.display='block';img.src='/camera/oak/stream.mjpg?t='+Date.now()}
+refreshStatus();setInterval(refreshStatus,10000);
+</script></body></html>"""
+
 
 app = FastAPI(title="Civic Ledger Local Face Verification", version="0.1.0")
 app.add_middleware(
@@ -232,6 +294,11 @@ def template_status() -> bool:
 @app.on_event("startup")
 def startup():
     init_db()
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def dashboard():
+    return HTMLResponse(DASHBOARD_HTML)
 
 
 @app.get("/health")
