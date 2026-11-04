@@ -58,6 +58,8 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<FaceResult | null>(null);
   const [notice, setNotice] = useState("");
+  const isOakCamera = cameraSource === "oak";
+  const isWebcam = !isOakCamera;
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -351,8 +353,6 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   };
 
   const selectedCamera = devices.find((device) => device.deviceId === deviceId);
-  const isOakCamera = cameraSource === "oak";
-  const isWebcam = !isOakCamera;
   const sourceCameraAvailable = isOakCamera || devices.some((device) => device.source === "webcam");
   const showCameraControls = enabled || status?.registered === false;
 
