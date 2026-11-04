@@ -1,90 +1,95 @@
-# Electronic Voting Blockchain MVP
+# Electronic Voting Blockchain
 
-> **Educational demonstration only. Not suitable for conducting real elections.**
-
-This is a PNPM + Turborepo monorepo with four independent React portals, one shared Hono API, reusable UI/contracts packages and PostgreSQL persistence through Drizzle.
+A multi-portal electronic voting application with a shared Hono API, PostgreSQL persistence, cryptographic ledger verification and independently deployable React frontends.
 
 ## Applications
-| Workspace | Local address | Purpose |
-|---|---|---|
-| Admin | http://localhost:5173 | Election Command Center; retains every legacy admin route |
-| Voter | http://localhost:5174 | Demo voter check-in, token, ballot and receipt |
-| Candidate | http://localhost:5175 | Read-only candidate roster and audit metadata |
-| Explorer | http://localhost:5176 | Blocks, Merkle roots, chain verification and receipt lookup |
-| API | http://localhost:3000 | Shared Hono endpoints and PostgreSQL persistence |
 
-## Run on Ubuntu / zsh
-Requirements: Node.js 22+ and PNPM 10+.
-```zsh
+| Workspace | Local URL | Responsibility |
+|---|---|---|
+| Admin | http://localhost:5173 | Election operations, voter administration and system monitoring |
+| Voter | http://localhost:5174 | Voter check-in, ballot selection, submission and receipt |
+| Candidate | http://localhost:5175 | Candidate information and read-only oversight |
+| Blockchain Explorer | http://localhost:5176 | Blocks, transactions, chain verification and receipt lookup |
+| API | http://localhost:3000 | Shared HTTP API and PostgreSQL-backed application services |
+
+## Technology
+
+- PNPM workspaces and Turborepo
+- React, Vite and TypeScript
+- Tailwind CSS and a shared component/design system
+- Hono API
+- PostgreSQL, Drizzle ORM and postgres.js
+- SHA-256 hash-linked blocks, Merkle roots and Ed25519 signing
+
+## Quick start
+
+Requirements: Node.js 22+, PNPM 10.28.2 and Docker Compose (or a reachable PostgreSQL database).
+
+```bash
+git clone https://github.com/Mohamed-faaris/e-voting-blockchain-mvp.git
+cd e-voting-blockchain-mvp
+
 corepack enable
-pnpm install --no-frozen-lockfile
+corepack prepare pnpm@10.28.2 --activate
+pnpm install
+
 cp .env.example .env
 docker compose up -d postgres
+
 pnpm db:migrate
 pnpm db:seed
 pnpm db:verify
+
 pnpm dev
 ```
 
-Build and verify:
-```zsh
+Open the portal URLs listed above. To run only one service, use `pnpm dev:api`, `pnpm dev:admin`, `pnpm dev:voter`, `pnpm dev:candidate` or `pnpm dev:explorer`.
+
+## Quality checks
+
+```bash
+pnpm build
+pnpm typecheck
+pnpm test
+pnpm db:verify
+```
+
+The database verification command requires PostgreSQL to be running and the schema/data to be initialized.
+
+## Database workflow
+
+| Command | Purpose |
+|---|---|
+| `pnpm db:generate` | Generate Drizzle migration artifacts |
+| `pnpm db:migrate` | Apply the current idempotent PostgreSQL schema setup |
+| `pnpm db:seed` | Add the deterministic synthetic voter and ledger dataset |
+| `pnpm db:reset` | Destructively restore the initial dataset |
+| `pnpm db:verify` | Check database records and blockchain integrity |
+| `pnpm db:studio` | Open Drizzle Studio |
+
+The initial dataset contains 5,000 synthetic voters across 12 districts: 3,250 initially voted and 1,750 initially not voted. Matching token, ballot transaction and block records are created for the voted population. Seeding is additive and does not overwrite existing voter state. Reset truncates the voting tables and must only be used when existing records can be discarded.
+
+The current runtime migration is maintained in `packages/database/src/migrate.ts`. Drizzle Kit generation writes migration artifacts but does not automatically apply them through the current `db:migrate` script. See [Project setup](project-setup.md) for the migration workflow.
+
+## Documentation
+
+- [Getting started](docs/getting-started.md) — installation, environment, PostgreSQL, seed and local run.
+- [Project setup](project-setup.md) — architecture, workspace responsibilities, scripts and deployment.
+- [Troubleshooting](docs/troubleshooting.md) — install, startup, database, API, CORS and deployment diagnostics.
+- [Monorepo architecture](docs/architecture/monorepo-migration.md) — workspace boundaries and migration notes.
+
+## Security considerations
+
+This project contains prototype voting and cryptographic workflows and is not certified for real election operations. Base64 is encoding, not encryption; the current session-key handling and district synchronization are not production security or consensus mechanisms. Do not use real voter records or operate a real election with this software. A separate security assessment, key-management redesign and appropriate certification would be required before any production election use.
+
+## Contributing
+
+Keep application-specific UI in its corresponding `apps/*` workspace and extract reusable components, contracts or service logic into `packages/*`. Before opening a pull request, run:
+
+```bash
 pnpm build
 pnpm typecheck
 pnpm test
 ```
-Run a service separately with `pnpm dev:api`, `pnpm dev:admin`, `pnpm dev:voter`, `pnpm dev:candidate` or `pnpm dev:explorer`.
 
-## Database workflow
-
-The API uses PostgreSQL through the shared `@evoting/database` package. Drizzle defines the typed schema and manages database setup; the API storage adapter uses parameterized PostgreSQL queries for the voting and ledger transactions. SQLite/Turso remains only as legacy compatibility/test code and is not selected by the API runtime.
-
-| Command | Purpose |
-|---|---|
-| `pnpm db:generate` | Generate Drizzle migration files after schema changes |
-| `pnpm db:migrate` | Apply the idempotent PostgreSQL schema migration |
-| `pnpm db:seed` | Seed 5,000 synthetic voters, 3,250 corresponding ballot transactions, spent tokens and district blocks |
-| `pnpm db:reset` | Destructively clear demo votes, tokens, blocks and voters, then rebuild the complete synthetic demo dataset |
-| `pnpm db:verify` | Check tables, voter/ballot counts, token states, database links and cryptographic blockchain integrity |
-| `pnpm db:studio` | Open Drizzle Studio |
-
-The seed creates 5,000 synthetic voters across 12 demo districts, 3,250 matching synthetic ballot transactions, spent voting tokens and one hash-linked block per district. The remaining 1,750 voters are eligible to try the voter check-in and voting flow. Demo ballots are distributed deterministically across the three built-in candidates. Re-running `pnpm db:seed` does not overwrite existing voter state or ledger data. Use `pnpm db:reset` only when you intentionally want to discard all demo votes, tokens and blocks before rebuilding the baseline dataset.
-
-Local PostgreSQL is provided by Docker Compose:
-```zsh
-docker compose up -d postgres
-pnpm db:migrate
-pnpm db:seed
-pnpm db:verify
-```
-The local Docker credentials are development-only. For hosted deployment, configure a managed PostgreSQL provider such as Neon and set `DATABASE_URL` only on the API server.
-
-## Deployment model
-The existing root Vercel project remains the API/legacy compatibility deployment. Deploy the four Vite apps as separate Vercel projects from this same repository, using each workspace as its project root: `apps/admin`, `apps/voter`, `apps/candidate` and `apps/explorer`. Keep workspace files available to the build (the workspace packages live outside each app directory). For each frontend deployment, configure:
-- `VITE_API_BASE_URL`: absolute origin of the deployed Hono API, e.g. `https://api.example.com`.
-- The other `VITE_*_URL` portal variables: deployed URLs for the other three frontends.
-
-On the API deployment, set `ALLOWED_ORIGINS` to a comma-separated list of the four frontend origins. Local development already allows ports 5173–5176. Do not set a wildcard origin when enabling voting POST requests.
-
-## Workspaces
-- `apps/api`: Hono API, PostgreSQL runtime adapter and blockchain demo. The legacy SQLite/Turso adapter is retained only for compatibility tests.
-- `apps/admin`, `apps/voter`, `apps/candidate`, `apps/explorer`: independent Vite/React apps.
-- `packages/ui`: shared shell, page headers, panels, metric cards, status and loading components.
-- `packages/design-system`: shared light-theme tokens and responsive shell styles.
-- `packages/contracts`: shared API/domain TypeScript contracts.
-- `packages/api-client`: typed fetch client for existing routes; supports cross-origin API base configuration.
-- `packages/database`: Drizzle schema, PostgreSQL client and migration, voter seed, reset and database verification scripts. The API workspace seeds and verifies the demo blockchain ledger.
-- `packages/seed`: deterministic synthetic voter fixture (5,000 records; 3,250 initially voted and 1,750 initially not voted).
-
-## Existing capabilities retained
-SHA-256 hash-linked blocks, Merkle roots, Ed25519 demo signing, check-in/token workflow, ballot casting, receipts, block/chain verification, district synchronization simulation and tamper demonstration remain in the shared API and legacy admin app. The API also exposes a demo `/api/tally` endpoint; the candidate portal currently remains a read-only candidate roster.
-
-## Important security limitations
-- Base64 ballot payload representation is **not encryption**.
-- The legacy admin page contains hardcoded demonstration credentials.
-- The current API returns a demo private session key to the browser and accepts it back on ballot submission.
-- District sync is an in-memory simulation, not distributed consensus.
-- `/api/tally` is a demonstration endpoint and is not an independently audited election-results process.
-- Never use real identities, voter rolls, ballots or election operations.
-- This is not a certified or secure election platform.
-
-See [the architecture and migration plan](docs/architecture/monorepo-migration.md).
+For database changes, update the Drizzle schema and the runtime migration path, then verify both a clean database setup and the existing data migration behavior.
