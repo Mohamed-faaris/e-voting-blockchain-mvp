@@ -6,7 +6,7 @@ Optional local-only face enrollment and matching for the Civic Ledger booth prot
 
 - Uses OpenCV YuNet for face detection and OpenCV SFace for face embeddings/matching.
 - Allows one enrolled face template on the booth machine.
-- Stores only the face embedding in a local SQLite file under `data/`; camera frames are processed in memory and are not retained.
+- Stores only one enrolled face embedding in a local SQLite file under `~/.local/share/civic-ledger-face/`; camera frames are processed in memory and are not retained.
 - Can read the OAK-D Lite depth bridge at `/tmp/oak_depth.sock`.
 - Exposes a local HTTP API on `127.0.0.1:8765`.
 
@@ -34,14 +34,14 @@ python download_models.py
 uvicorn app:app --host 127.0.0.1 --port 8765
 ```
 
-The service binds to loopback only. Keep it on the booth machine. The model downloader fetches the OpenCV Zoo YuNet and SFace ONNX models into `models/`; model files are intentionally not committed.
+The service binds to loopback only. Keep it on the booth machine. The model downloader fetches the OpenCV Zoo YuNet and SFace ONNX models into `models/`; model files are intentionally not committed. The default local data directory is owner-only (`0700`) and the SQLite file is owner-only (`0600`) where supported.
 
 ## Frontend workflow
 
 1. Open Admin → Voter Check-in.
 2. Select either the default webcam or the OAK RGB camera from the browser camera list.
 3. Use the admin face registration action to enroll/replace the booth's single face template.
-4. Face verification is optional. If enabled, capture a frame and call the local verification API.
+4. Face verification is optional. If enabled, capture a frame and call the local verification API. Only the single enrolled face template is accepted.
 5. With OAK selected, request stereo depth verification. With a regular webcam, depth checks are unavailable.
 6. If the local service, camera or depth bridge is unavailable, the existing voter check-in remains available. A positive face mismatch is shown as a mismatch; it is not silently treated as a match.
 
@@ -53,4 +53,4 @@ The service binds to loopback only. Keep it on the booth machine. The model down
 - `POST /face/verify` — JSON: `{ "image": "<base64 JPEG>", "camera_source": "webcam|oak", "check_depth": true|false }`.
 - `DELETE /face/enrollment` — delete the local face template.
 
-The admin UI is a local booth interface, not an independent authentication boundary. Restrict physical access to the booth and protect the host OS account and local data directory.
+The service stores the embedding in a local SQLite file under `~/.local/share/civic-ledger-face/face_templates.sqlite3` by default; camera frames are not retained. The Admin booth provides the registration, replacement and deletion controls. The service binds to loopback through the Vite proxy. Restrict physical access to the booth and protect the host OS account and local data directory.

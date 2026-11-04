@@ -18,8 +18,15 @@ from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent
 MODEL_DIR = ROOT / "models"
-DATA_DIR = ROOT / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR = Path(os.getenv(
+    "FACE_DATA_DIR",
+    str(Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "civic-ledger-face"),
+))
+DATA_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+try:
+    DATA_DIR.chmod(0o700)
+except OSError:
+    pass
 DB_PATH = Path(os.getenv("FACE_DB_PATH", str(DATA_DIR / "face_templates.sqlite3")))
 DEPTH_SOCKET = os.getenv("OAK_DEPTH_SOCKET", "/tmp/oak_depth.sock")
 FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.363"))
@@ -65,6 +72,10 @@ def init_db() -> None:
             )"""
         )
         connection.commit()
+    try:
+        DB_PATH.chmod(0o600)
+    except OSError:
+        pass
 
 
 def models():
@@ -150,34 +161,60 @@ def evaluate_depth(depth: np.ndarray, box: tuple[int, int, int, int], rgb_size: 
     rgb_width, rgb_height = rgb_size
     x1, y1, x2, y2 = box
     scale_x, scale_y = depth.shape[1] / rgb_width, depth.shape[0] / rgb_height
-    dx1, dx2 = int(x1 * scale_x), int(x2 * scale_x)
-    dy1, dy2 = int(y1 * scale_y), int(y2 * scale_y)
-    dx1, dx2 = max(0, dx1), min(depth.shape[1], dx2)
-    dy1, dy2 = max(0, dy1), min(depth.shape[0], dy2)
+    dx1, dx2 = max(0, int(x1 * scale_x)), min(depth.shape[1], int(x2 * scale_x))
+    dy1, dy2 = max(0, int(y1 * scale_y)), min(depth.shape[0], int(y2 * scale_y))
     roi = depth[dy1:dy2, dx1:dx2]
     if roi.size == 0:
         return {"passed": False, "reason": "Face region did not overlap the depth frame."}
 
-    valid = roi[(roi > 0) & (roi < 10000)].astype(np.float32)
-    valid_ratio = float(valid.size / roi.size)
-    if valid.size < 80 or valid_ratio < 0.55:
+    height, width = roi.shape
+    inner = roi[int(height * 0.16):int(height * 0.90), int(width * 0.16):int(width * 0.84)]
+    valid = inner[(inner >= 200) & (inner <= 2500)].astype(np.float32)
+    valid_ratio = float(valid.size / max(inner.size, 1))
+    if valid.size < 80 or valid_ratio < 0.35:
         return {
             "passed": False,
             "reason": "Insufficient valid stereo depth over the face.",
             "valid_ratio": round(valid_ratio, 3),
         }
 
-    p10, p50, p90 = [float(v) for v in np.percentile(valid, [10, 50, 90])]
+    p10, median, p90 = [float(value) for value in np.percentile(valid, [10, 50, 90])]
     spread = p90 - p10
-    # A flat print/display usually forms a near-planar depth surface. This is a
-    # heuristic only; it is not a certified presentation-attack detector.
-    passed = spread >= 12.0
+
+    # A real face should have a nearer nose bridge than the left/right cheeks.
+    # This assumes the bridge depth map is aligned to its RGB camera.
+    nose = roi[int(height * 0.34):int(height * 0.72), int(width * 0.40):int(width * 0.60)]
+    left_cheek = roi[int(height * 0.40):int(height * 0.74), int(width * 0.17):int(width * 0.38)]
+    right_cheek = roi[int(height * 0.40):int(height * 0.74), int(width * 0.62):int(width * 0.83)]
+
+    def region_median(region: np.ndarray) -> float | None:
+        values = region[(region >= 200) & (region <= 2500)]
+        return float(np.median(values)) if values.size >= 12 else None
+
+    nose_depth = region_median(nose)
+    cheek_depths = [
+        value for value in (region_median(left_cheek), region_median(right_cheek))
+        if value is not None
+    ]
+    nose_relief = (
+        float(np.median(cheek_depths)) - nose_depth
+        if nose_depth is not None and cheek_depths
+        else None
+    )
+
+    passed = spread >= 15.0 and nose_relief is not None and nose_relief >= 5.0
+    reason = (
+        "Stereo depth shows facial surface variation and a nearer nose region."
+        if passed
+        else "The depth map does not show enough 3D facial shape. Check alignment, distance and lighting."
+    )
     return {
-        "passed": passed,
-        "reason": "Depth variation is consistent with a 3D face." if passed else "Depth surface appears too flat; reposition and retry.",
+        "passed": bool(passed),
+        "reason": reason,
         "valid_ratio": round(valid_ratio, 3),
-        "median_depth_mm": round(p50, 1),
+        "median_depth_mm": round(median, 1),
         "depth_spread_mm": round(spread, 1),
+        "nose_relief_mm": round(nose_relief, 1) if nose_relief is not None else None,
     }
 
 
@@ -199,7 +236,8 @@ def health():
         "face_registered": template_status(),
         "oak_depth_socket": DEPTH_SOCKET,
         "oak_depth_available": Path(DEPTH_SOCKET).exists(),
-        "storage": "local SQLite",
+        "oak_depth_protocol": "12-byte little-endian <III header + uint16 millimetres",
+        "storage": "local SQLite (single embedding only)",
     }
 
 
