@@ -53,4 +53,4 @@ The service binds to loopback only. Keep it on the booth machine. The model down
 - `POST /face/verify` — JSON: `{ "image": "<base64 JPEG>", "camera_source": "webcam|oak", "check_depth": true|false }`.
 - `DELETE /face/enrollment` — delete the local face template.
 
-The admin UI is a local booth interface, not an independent authentication boundary. Restrict physical access to the booth and protect the host OS account and local data directory.
+The service stores the embedding in a local SQLite file under `~/.local/share/civic-ledger-face/face_templates.sqlite3` by default; camera frames are not retained. The Admin booth provides the registration, replacement and deletion controls. The service binds to loopback through the Vite proxy. Restrict physical access to the booth and protect the host OS account and local data directory.
