@@ -59,7 +59,12 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
 
   const refreshCameras = useCallback(async () => {
     try {
-      const list = await navigator.mediaDevices.enumerateDevices();
+      let list = await navigator.mediaDevices.enumerateDevices();
+      if (list.some((device) => device.kind === "videoinput") && list.filter((device) => device.kind === "videoinput").every((device) => !device.label)) {
+        const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        permissionStream.getTracks().forEach((track) => track.stop());
+        list = await navigator.mediaDevices.enumerateDevices();
+      }
       const cameras = list.filter((device) => device.kind === "videoinput").map((device, index) => {
         const label = device.label || `Camera ${index + 1}`;
         const oak = /oak|depthai|rgb bridge/i.test(label);
@@ -202,6 +207,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
 
   const selectedCamera = devices.find((device) => device.deviceId === deviceId);
   const sourceCameraAvailable = devices.some((device) => device.source === cameraSource);
+  const showCameraControls = enabled || status?.registered === false;
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
@@ -227,7 +233,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
         </strong>
       </div>
 
-      {enabled ? (
+      {showCameraControls ? (
         <>
           <div className="grid gap-3 md:grid-cols-[1fr_1.2fr]">
             <div className="space-y-3">
@@ -304,7 +310,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
           {notice && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">{notice}</p>}
           {cameraError && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{cameraError}</p>}
           {serviceError && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">{serviceError}</p>}
-          {(serviceError || cameraError || (status !== null && !status.registered) || result?.depth?.unavailable) && (
+          {enabled && (serviceError || cameraError || (status !== null && !status.registered) || result?.depth?.unavailable) && (
             <button
               type="button"
               className="ev-button secondary w-full"
@@ -321,9 +327,20 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
           )}
         </>
       ) : (
-        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-          Face verification is disabled. The existing smartcard and voter check-in flow remains available without biometric verification.
-        </p>
+        <>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            Face verification is disabled. The existing smartcard and voter check-in flow remains available without biometric verification.
+          </p>
+          {fallbackAvailable && (
+            <button
+              type="button"
+              className="ev-button secondary w-full"
+              onClick={() => onFallback?.()}
+            >
+              Continue this smartcard check-in without face verification
+            </button>
+          )}
+        </>
       )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
