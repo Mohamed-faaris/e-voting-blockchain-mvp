@@ -69,7 +69,7 @@ export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void 
       const preferred = cameras.find((camera) => camera.source === "oak") ?? cameras[0];
       if (preferred) {
         setDeviceId((current) => current || preferred.deviceId);
-        setCameraSource((current) => current === "oak" && cameras.some((camera) => camera.source === "oak") ? current : preferred.source);
+        if (cameras.some((camera) => camera.source === "oak")) setCameraSource("oak");
       }
       setCameraError("");
     } catch (error) {
@@ -231,14 +231,27 @@ export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void 
           <div className="grid gap-3 md:grid-cols-[1fr_1.2fr]">
             <div className="space-y-3">
               <label className="block space-y-1 text-xs font-semibold text-slate-700">
-                Camera source
+                Camera type
+                <select className="w-full rounded-lg border border-slate-300 bg-white p-2.5" value={cameraSource} onChange={(event) => {
+                  const source = event.target.value as CameraSource;
+                  setCameraSource(source);
+                  const matching = devices.find((device) => device.source === source);
+                  if (matching) setDeviceId(matching.deviceId);
+                  setResult(null);
+                }}>
+                  <option value="webcam">Default webcam / USB camera</option>
+                  <option value="oak">OAK-D Lite RGB bridge (stereo depth)</option>
+                </select>
+              </label>
+              <label className="block space-y-1 text-xs font-semibold text-slate-700">
+                Video device
                 <select className="w-full rounded-lg border border-slate-300 bg-white p-2.5" value={deviceId} onChange={(event) => {
                   const next = devices.find((device) => device.deviceId === event.target.value);
                   setDeviceId(event.target.value);
-                  if (next) setCameraSource(next.source);
+                  if (next && /oak|depthai|rgb bridge/i.test(next.label)) setCameraSource("oak");
                   setResult(null);
                 }}>
-                  {devices.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.source === "oak" ? "OAK-D Lite · " : "Default / USB · "}{device.label}</option>)}
+                  {devices.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label}</option>)}
                 </select>
               </label>
               <div className="flex gap-2">
@@ -246,7 +259,7 @@ export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void 
                 <button type="button" onClick={() => void startCamera()} className="ev-button flex-1"><Video size={14} /> Start camera</button>
               </div>
               <p className="text-[11px] text-slate-500">
-                {cameraSource === "oak" ? "OAK-D Lite selected. Face matching will use RGB and request stereo depth from the existing local bridge." : "Standard webcam selected. Face matching works, but stereo depth checks are unavailable."}
+                {cameraSource === "oak" ? "OAK-D Lite selected. Face matching uses RGB and reads the aligned stereo-depth socket at /tmp/oak_depth.sock." : "Standard webcam selected. Face matching works, but stereo-depth checks are unavailable."}
               </p>
             </div>
             <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-lg border border-slate-300 bg-slate-950">
@@ -284,6 +297,15 @@ export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void 
           {notice && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">{notice}</p>}
           {cameraError && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{cameraError}</p>}
           {serviceError && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">{serviceError}</p>}
+          {(serviceError || (result && (!result.matched || (result.depth !== null && !result.depth.passed)))) && (
+            <button
+              type="button"
+              className="ev-button secondary w-full"
+              onClick={() => { setEnabled(false); setResult(null); stopCamera(); }}
+            >
+              Continue without face verification
+            </button>
+          )}
         </>
       ) : (
         <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
