@@ -118,8 +118,8 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   }, [refreshStatus, stopCamera]);
 
   useEffect(() => {
-    if (enabled) void refreshCameras();
-  }, [enabled, refreshCameras]);
+    if (enabled && cameraSource === "webcam") void refreshCameras();
+  }, [enabled, cameraSource, refreshCameras]);
 
   const capturePayload = () => {
     if (cameraSource === "oak") {
@@ -274,7 +274,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
                 </select>
               </label>}
               <div className="flex gap-2">
-                <button type="button" onClick={() => void refreshCameras()} className="ev-button secondary flex-1"><RefreshCw size={14} /> Refresh</button>
+                {cameraSource === "webcam" && <button type="button" onClick={() => void refreshCameras()} className="ev-button secondary flex-1"><RefreshCw size={14} /> Refresh devices</button>}
                 <button type="button" disabled={!sourceCameraAvailable} onClick={() => void startCamera()} className="ev-button flex-1 disabled:opacity-50"><Video size={14} /> Start camera</button>
               </div>
               <p className="text-[11px] text-slate-500">
@@ -360,7 +360,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
       )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
-        Privacy: the Python service stores one face embedding locally; it does not save captured camera frames. This prototype's depth-spread test is only a heuristic and is not certified liveness detection. If the service or selected camera is unavailable, use the existing non-biometric check-in flow.
+        Privacy: the Python service stores one face embedding locally; it does not save captured camera frames. In OAK mode, the Python service connects directly through DepthAI and captures synchronized RGB/depth frames. This prototype's depth-spread test is only a heuristic and is not certified liveness detection. If the service or selected camera is unavailable, use the existing non-biometric check-in flow.
       </p>
     </section>
   );
