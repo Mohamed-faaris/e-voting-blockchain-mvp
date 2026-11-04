@@ -9,7 +9,7 @@ type FaceResult = {
   matched: boolean;
   similarity: number;
   threshold: number;
-  depth: null | { passed: boolean; reason: string; valid_ratio?: number; median_depth_mm?: number; depth_spread_mm?: number; nose_relief_mm?: number };
+  depth: null | { passed: boolean; unavailable?: boolean; reason: string; valid_ratio?: number; median_depth_mm?: number; depth_spread_mm?: number; nose_relief_mm?: number };
   message: string;
   note: string;
 };
@@ -24,7 +24,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void }) {
+export function FaceVerificationPanel({ onVerified, onEnabledChange, onBypass }: { onVerified?: () => void; onEnabledChange?: (enabled: boolean) => void; onBypass?: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [devices, setDevices] = useState<CameraDevice[]>([]);
@@ -214,7 +214,7 @@ export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void 
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-          <input type="checkbox" checked={enabled} onChange={(event) => { setEnabled(event.target.checked); setResult(null); }} />
+          <input type="checkbox" checked={enabled} onChange={(event) => { const next = event.target.checked; setEnabled(next); onEnabledChange?.(next); setResult(null); }} />
           Enable face check
         </label>
       </div>
@@ -298,11 +298,17 @@ export function FaceVerificationPanel({ onVerified }: { onVerified?: () => void 
           {notice && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">{notice}</p>}
           {cameraError && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{cameraError}</p>}
           {serviceError && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">{serviceError}</p>}
-          {(serviceError || (result && (!result.matched || (result.depth !== null && !result.depth.passed)))) && (
+          {(serviceError || cameraError || (status !== null && !status.registered) || result?.depth?.unavailable) && (
             <button
               type="button"
               className="ev-button secondary w-full"
-              onClick={() => { setEnabled(false); setResult(null); stopCamera(); }}
+              onClick={() => {
+                setEnabled(false);
+                onEnabledChange?.(false);
+                setResult(null);
+                stopCamera();
+                onBypass?.();
+              }}
             >
               Continue without face verification
             </button>
