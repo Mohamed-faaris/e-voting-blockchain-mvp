@@ -283,7 +283,7 @@ def verify(request: VerifyRequest):
                 depth = oak_depth_frame()
                 depth_result = evaluate_depth(depth, box, (image.shape[1], image.shape[0]))
             except RuntimeError as exc:
-                depth_result = {"passed": False, "reason": str(exc)}
+                depth_result = {"passed": False, "unavailable": True, "reason": str(exc)}
 
     return {
         "success": True,
