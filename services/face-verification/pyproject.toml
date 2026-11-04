@@ -9,6 +9,7 @@ dependencies = [
     "opencv-contrib-python-headless>=4.10,<5",
     "numpy>=1.26,<3",
     "pydantic>=2.8,<3",
+    "depthai==2.32.0.0",
     "depthai>=3.0,<4",
 ]
 
