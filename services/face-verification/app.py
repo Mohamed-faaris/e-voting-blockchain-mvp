@@ -6,6 +6,7 @@ import os
 import socket
 import sqlite3
 import struct
+import time
 from contextlib import closing
 from pathlib import Path
 from typing import Literal
@@ -13,6 +14,7 @@ from typing import Literal
 import cv2
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -29,6 +31,10 @@ except OSError:
     pass
 DB_PATH = Path(os.getenv("FACE_DB_PATH", str(DATA_DIR / "face_templates.sqlite3")))
 DEPTH_SOCKET = os.getenv("OAK_DEPTH_SOCKET", "/tmp/oak_depth.sock")
+OAK_RGB_DEVICE = os.getenv("OAK_RGB_DEVICE", "/dev/video10")
+OAK_RGB_WIDTH = int(os.getenv("OAK_RGB_WIDTH", "640"))
+OAK_RGB_HEIGHT = int(os.getenv("OAK_RGB_HEIGHT", "480"))
+OAK_STREAM_FPS = max(1, min(30, int(os.getenv("OAK_STREAM_FPS", "15"))))
 FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.363"))
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 DEPTH_TIMEOUT_SECONDS = float(os.getenv("OAK_DEPTH_TIMEOUT", "1.5"))
@@ -302,3 +308,142 @@ def delete_enrollment():
         connection.execute("DELETE FROM face_template WHERE id = 1")
         connection.commit()
     return {"success": True, "registered": False, "message": "Local face template deleted."}
+
+
+def open_oak_rgb():
+    """Open the OAK RGB virtual camera exposed by the existing bridge."""
+    source = int(OAK_RGB_DEVICE) if OAK_RGB_DEVICE.isdigit() else OAK_RGB_DEVICE
+    capture = cv2.VideoCapture(source, cv2.CAP_V4L2)
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, OAK_RGB_WIDTH)
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, OAK_RGB_HEIGHT)
+    capture.set(cv2.CAP_PROP_FPS, OAK_STREAM_FPS)
+    if not capture.isOpened():
+        capture.release()
+        raise HTTPException(
+            status_code=503,
+            detail=f"OAK RGB camera is unavailable at {OAK_RGB_DEVICE}. Check the OAK bridge, device permissions, and OAK_RGB_DEVICE.",
+        )
+    return capture
+
+
+def oak_bridge_status():
+    rgb_ok = False
+    rgb_error = None
+    capture = None
+    try:
+        capture = open_oak_rgb()
+        rgb_ok = True
+    except HTTPException as exc:
+        rgb_error = str(exc.detail)
+    finally:
+        if capture is not None:
+            capture.release()
+
+    depth_ok = False
+    depth_error = None
+    try:
+        # Probe by actually reading a frame, not merely checking that a stale socket path exists.
+        oak_depth_frame()
+        depth_ok = True
+    except RuntimeError as exc:
+        depth_error = str(exc)
+
+    return {
+        "rgb": {"available": rgb_ok, "device": OAK_RGB_DEVICE, "error": rgb_error},
+        "depth": {"available": depth_ok, "socket": DEPTH_SOCKET, "error": depth_error},
+        "ready": rgb_ok and depth_ok,
+    }
+
+
+def annotated_oak_frame(frame: np.ndarray) -> np.ndarray:
+    """Draw face boxes and identify whether the detected face matches the local enrollment."""
+    height, width = frame.shape[:2]
+    detector, recognizer = models()
+    detector.setInputSize((width, height))
+    _, faces = detector.detect(frame)
+    if faces is None or len(faces) == 0:
+        cv2.putText(frame, "NO FACE DETECTED", (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 165, 255), 2)
+        return frame
+
+    enrolled = None
+    if template_status():
+        with closing(sqlite3.connect(DB_PATH)) as connection:
+            row = connection.execute("SELECT embedding FROM face_template WHERE id = 1").fetchone()
+        if row:
+            enrolled = np.frombuffer(row[0], dtype="<f4").astype(np.float32)
+
+    for face in faces:
+        x, y, box_w, box_h = [int(round(value)) for value in face[:4]]
+        x1, y1 = max(0, x), max(0, y)
+        x2, y2 = min(width, x + box_w), min(height, y + box_h)
+        label = "FACE DETECTED"
+        color = (0, 200, 255)
+        if enrolled is not None:
+            aligned = recognizer.alignCrop(frame, face)
+            feature = recognizer.feature(aligned).astype(np.float32).reshape(-1)
+            norm = float(np.linalg.norm(feature))
+            if norm > 0:
+                feature /= norm
+                score = float(np.dot(feature, enrolled) / max(float(np.linalg.norm(enrolled)), 1e-8))
+                matched = score >= FACE_MATCH_THRESHOLD
+                label = f"{'ENROLLED' if matched else 'UNKNOWN'} {score:.2f}"
+                color = (0, 200, 0) if matched else (0, 0, 255)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        text_y = max(22, y1 - 9)
+        cv2.putText(frame, label, (x1, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+    return frame
+
+
+@app.get("/camera/oak/status")
+def oak_camera_status():
+    return oak_bridge_status()
+
+
+@app.get("/camera/oak/snapshot")
+def oak_camera_snapshot():
+    capture = open_oak_rgb()
+    try:
+        ok, frame = capture.read()
+        if not ok or frame is None:
+            raise HTTPException(status_code=503, detail="OAK RGB bridge opened but did not return a frame.")
+        ok, encoded = cv2.imencode(".jpg", annotated_oak_frame(frame))
+        if not ok:
+            raise HTTPException(status_code=500, detail="Could not encode OAK camera frame.")
+        return Response(content=encoded.tobytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+    finally:
+        capture.release()
+
+
+def oak_mjpeg_generator():
+    capture = open_oak_rgb()
+    frame_delay = 1.0 / OAK_STREAM_FPS
+    try:
+        while True:
+            started = time.monotonic()
+            ok, frame = capture.read()
+            if not ok or frame is None:
+                time.sleep(0.1)
+                continue
+            try:
+                annotated = annotated_oak_frame(frame)
+            except HTTPException:
+                annotated = frame
+                cv2.putText(annotated, "FACE MODELS UNAVAILABLE", (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+            ok, encoded = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if ok:
+                yield (b"--frame\\r\\nContent-Type: image/jpeg\\r\\nCache-Control: no-store\\r\\n\\r\\n" + encoded.tobytes() + b"\\r\\n")
+            remaining = frame_delay - (time.monotonic() - started)
+            if remaining > 0:
+                time.sleep(remaining)
+    finally:
+        capture.release()
+
+
+@app.get("/camera/oak/stream.mjpg")
+def oak_camera_stream():
+    # Each viewer gets its own capture handle. Close the browser stream to release it.
+    return StreamingResponse(
+        oak_mjpeg_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
