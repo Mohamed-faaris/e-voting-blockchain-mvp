@@ -54,12 +54,6 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
     setPendingVoterId(null);
   };
 
-  const handleFaceBypass = () => {
-    if (!pendingVoterId) return;
-    onCardTapped(pendingVoterId);
-    setPendingVoterId(null);
-  };
-
   const handleFaceModeChange = (enabled: boolean) => {
     setFaceCheckEnabled(enabled);
     onFaceModeChange?.(enabled);
@@ -133,7 +127,6 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
       <FaceVerificationPanel
         onVerified={handleFaceVerified}
         onEnabledChange={handleFaceModeChange}
-        onBypass={handleFaceBypass}
       />
     </div>
   );
