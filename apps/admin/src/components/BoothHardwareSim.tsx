@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Camera, Radio, CheckCircle2, AlertOctagon, Scan, AlertCircle } from "lucide-react";
 import * as faceapi from "@vladmandic/face-api";
+import { api } from "@evoting/api-client";
+import type { Voter } from "@evoting/contracts";
 
 interface BoothHardwareSimProps {
   onCardTapped: (voterId: string) => void;
@@ -13,6 +15,9 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
 }) => {
   const [rfidActive, setRfidActive] = useState(false);
   const [activeCard, setActiveCard] = useState<string | null>(null);
+  const [demoCards, setDemoCards] = useState<Voter[]>([]);
+  const [loadingCards, setLoadingCards] = useState(true);
+  const [cardLoadError, setCardLoadError] = useState<string | null>(null);
 
   // Real Camera & Face Detection States
   const [cameraOn, setCameraOn] = useState(false);
@@ -27,13 +32,7 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const intervalRef = useRef<any>(null);
 
-  const demoCards = [
-    { voterId: "VOTER-101", name: "Amara Okafor", chipId: "RPIC-04-A9F1" },
-    { voterId: "VOTER-102", name: "Devon Vance", chipId: "RPIC-04-B3C2" },
-    { voterId: "VOTER-103", name: "Priya Sharma", chipId: "RPIC-04-E7D4" }
-  ];
-
-  const handleTap = (card: typeof demoCards[0]) => {
+  const handleTap = (card: Voter) => {
     setRfidActive(true);
     setActiveCard(card.voterId);
     setTimeout(() => {
@@ -41,6 +40,21 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
       onCardTapped(card.voterId);
     }, 400);
   };
+
+  // Load the same unvoted seeded demo accounts used by the voter portal.
+  useEffect(() => {
+    api.voters()
+      .then(({ voters }) => {
+        const unvotedDemoVoters = voters
+          .filter((voter) => voter.voterId.startsWith("DEMO-") && !voter.hasVoted)
+          .sort((a, b) => a.voterId.localeCompare(b.voterId, undefined, { numeric: true }));
+        setDemoCards(unvotedDemoVoters);
+      })
+      .catch((err) => {
+        setCardLoadError(err instanceof Error ? err.message : "Could not load demo voter cards.");
+      })
+      .finally(() => setLoadingCards(false));
+  }, []);
 
   // 1. Load actual TensorFlow face-api TinyFaceDetector model
   useEffect(() => {
@@ -207,12 +221,27 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
             </span>
           </div>
 
-          <p className="text-[11px] text-slate-500">
-            Click any voter smartcard below to simulate tapping at the physical booth reader:
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-slate-500">
+              Tap an unvoted demo smartcard to simulate the physical booth reader:
+            </p>
+            <span className="shrink-0 text-[10px] font-mono text-slate-500">
+              {demoCards.length.toLocaleString()} AVAILABLE
+            </span>
+          </div>
+
+          {cardLoadError && (
+            <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700">
+              {cardLoadError}
+            </p>
+          )}
 
           <div className="space-y-1.5">
-            {demoCards.map((c) => (
+            {loadingCards ? (
+              <p className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500">
+                Loading demo smartcards…
+              </p>
+            ) : demoCards.length > 0 ? demoCards.slice(0, 6).map((c) => (
               <button
                 key={c.voterId}
                 onClick={() => handleTap(c)}
@@ -227,10 +256,14 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
                   <div className="font-mono text-[10px] text-slate-400">ID: {c.voterId}</div>
                 </div>
                 <span className="font-mono text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 border border-slate-200">
-                  {c.chipId}
+                  {`RPIC-${c.voterId.replace(/^DEMO-/, "")}`}
                 </span>
               </button>
-            ))}
+            )) : (
+              <p className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500">
+                No unvoted demo voters available. Run the database seed command to restore the demo roster.
+              </p>
+            )}
           </div>
         </div>
 
