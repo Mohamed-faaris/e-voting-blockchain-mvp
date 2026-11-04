@@ -47,9 +47,9 @@ Open the portal URLs listed above. To run only one service, use `pnpm dev:api`, 
 
 ## Optional local face verification
 
-The Admin booth includes an optional local Python face-verification service. It supports a browser-selected webcam or the OAK-D Lite RGB bridge, and can request a stereo-depth frame from the existing local bridge at `/tmp/oak_depth.sock`.
+The Admin booth includes an optional local Python face-verification service. It supports a browser-selected webcam and direct OAK-D Lite RGB + stereo-depth capture through the Luxonis DepthAI Python SDK. The Python service owns the OAK device connection; no UVC bridge, virtual camera or Unix depth socket is required.
 
-Setup and limitations: [Local face verification service](services/face-verification/README.md).
+Setup, supported SDK version and limitations: [Local face verification service](services/face-verification/README.md).
 
 The service stores one face embedding in local SQLite and does not retain captured frames. Face matching and depth-spread checks are experimental prototype controls, not certified biometric authentication or guaranteed anti-spoofing. If face verification is disabled or unavailable, the existing non-biometric check-in path remains available.
 
