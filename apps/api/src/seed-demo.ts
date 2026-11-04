@@ -5,10 +5,10 @@ import { buildDemoLedgerBlocks } from "./seed-demo-data.js";
 import { toPostgresTimestamp } from "./storage/postgres-date.js";
 
 const { client } = createDatabase();
-function toJson(value: unknown) {
+function toJson(value: unknown): string {
   const serialized = JSON.stringify(value);
   if (serialized === undefined) throw new Error("Cannot serialize demo seed data.");
-  return JSON.parse(serialized);
+  return serialized;
 }
 
 try {
@@ -31,7 +31,7 @@ try {
       await client`
         INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
         VALUES (${genesis.index}, ${genesis.districtId}, ${toPostgresTimestamp(genesis.timestamp)}, ${genesis.previousHash},
-                ${genesis.merkleRoot}, ${genesis.hash}, ${client.json(toJson(genesis))})
+                ${genesis.merkleRoot}, ${genesis.hash}, ${toJson(genesis)})
       `;
     }
 
@@ -47,7 +47,7 @@ try {
         await tx`
           INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
           VALUES (${block.index}, ${block.districtId}, ${toPostgresTimestamp(block.timestamp)}, ${block.previousHash},
-                  ${block.merkleRoot}, ${block.hash}, ${tx.json(toJson(block))})
+                  ${block.merkleRoot}, ${block.hash}, ${toJson(block)})
         `;
         for (const ballot of block.transactions) {
           const voterId = voterIdsByToken.get(ballot.tokenId);
@@ -59,7 +59,7 @@ try {
           `;
           await tx`
             INSERT INTO transactions (id, block_index, token_id, district_id, payload_json)
-            VALUES (${ballot.id}, ${block.index}, ${ballot.tokenId}, ${ballot.districtId}, ${tx.json(toJson(ballot))})
+            VALUES (${ballot.id}, ${block.index}, ${ballot.tokenId}, ${ballot.districtId}, ${toJson(ballot)})
           `;
           await tx`UPDATE voters SET issued_token_id = ${ballot.tokenId}, has_voted = TRUE WHERE voter_id = ${voterId}`;
         }
