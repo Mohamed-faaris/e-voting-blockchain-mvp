@@ -267,7 +267,6 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
               {cameraSource === "webcam" && <label className="block space-y-1 text-xs font-semibold text-slate-700">
                 Video device
                 <select className="w-full rounded-lg border border-slate-300 bg-white p-2.5" value={deviceId} onChange={(event) => {
-                  const next = devices.find((device) => device.deviceId === event.target.value);
                   setDeviceId(event.target.value);
                   setResult(null);
                 }}>
@@ -283,12 +282,11 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
               </p>
               {!sourceCameraAvailable && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
-                  No {cameraSource === "oak" ? "OAK-D Lite RGB bridge" : "webcam"} device is available. Select an available camera or connect the device before starting.
+                  No {cameraSource === "oak" ? "OAK-D Lite camera" : "webcam"} device is available. Select an available camera or connect the device before starting.
                 </p>
               )}
             </div>
             <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-lg border border-slate-300 bg-slate-950">
-              <video ref={videoRef} muted playsInline className="h-full max-h-64 w-full object-cover" />
               {cameraSource === "oak" ? (
                 oakPreviewActive && <img src={`${API}/camera/oak/stream.mjpg`} alt="OAK-D Lite DepthAI RGB stream" className="h-full max-h-64 w-full object-contain" />
               ) : (
