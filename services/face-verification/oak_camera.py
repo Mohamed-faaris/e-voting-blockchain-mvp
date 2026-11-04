@@ -223,7 +223,8 @@ class OakCamera:
     def status(self, probe: bool = True) -> dict[str, Any]:
         if probe:
             try:
-                self.start()
+                # Wait for the first complete synchronized RGB/depth pair.
+                self.get_frame_pair(timeout=3.0)
             except OakCameraError:
                 pass
 
