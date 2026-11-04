@@ -24,7 +24,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerified?: () => void; onEnabledChange?: (enabled: boolean) => void }) {
+export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback, fallbackAvailable = false }: { onVerified?: () => void; onEnabledChange?: (enabled: boolean) => void; onFallback?: () => void; fallbackAvailable?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [devices, setDevices] = useState<CameraDevice[]>([]);
@@ -59,7 +59,12 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerif
 
   const refreshCameras = useCallback(async () => {
     try {
-      const list = await navigator.mediaDevices.enumerateDevices();
+      let list = await navigator.mediaDevices.enumerateDevices();
+      if (list.some((device) => device.kind === "videoinput") && list.filter((device) => device.kind === "videoinput").every((device) => !device.label)) {
+        const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        permissionStream.getTracks().forEach((track) => track.stop());
+        list = await navigator.mediaDevices.enumerateDevices();
+      }
       const cameras = list.filter((device) => device.kind === "videoinput").map((device, index) => {
         const label = device.label || `Camera ${index + 1}`;
         const oak = /oak|depthai|rgb bridge/i.test(label);
@@ -201,6 +206,8 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerif
   };
 
   const selectedCamera = devices.find((device) => device.deviceId === deviceId);
+  const sourceCameraAvailable = devices.some((device) => device.source === cameraSource);
+  const showCameraControls = enabled || status?.registered === false;
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
@@ -210,7 +217,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerif
             <Fingerprint className="h-4 w-4 text-indigo-600" /> Optional Face Verification
           </h3>
           <p className="mt-1 text-xs text-slate-500">
-            Local Python recognition with optional OAK-D Lite stereo-depth screening.
+            Admin-only enrollment and local Python face matching, with optional OAK-D Lite stereo-depth screening.
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
@@ -226,7 +233,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerif
         </strong>
       </div>
 
-      {enabled ? (
+      {showCameraControls ? (
         <>
           <div className="grid gap-3 md:grid-cols-[1fr_1.2fr]">
             <div className="space-y-3">
@@ -256,11 +263,16 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerif
               </label>
               <div className="flex gap-2">
                 <button type="button" onClick={() => void refreshCameras()} className="ev-button secondary flex-1"><RefreshCw size={14} /> Refresh</button>
-                <button type="button" onClick={() => void startCamera()} className="ev-button flex-1"><Video size={14} /> Start camera</button>
+                <button type="button" disabled={!sourceCameraAvailable} onClick={() => void startCamera()} className="ev-button flex-1 disabled:opacity-50"><Video size={14} /> Start camera</button>
               </div>
               <p className="text-[11px] text-slate-500">
-                {cameraSource === "oak" ? "OAK-D Lite selected. Face matching uses RGB and reads the aligned stereo-depth socket at /tmp/oak_depth.sock." : "Standard webcam selected. Face matching works, but stereo-depth checks are unavailable."}
+                {cameraSource === "oak" ? "OAK-D Lite selected. Face matching uses the OAK RGB bridge and reads the aligned stereo-depth socket from the Python service." : "Standard webcam selected. Face matching works, but stereo-depth checks are unavailable."}
               </p>
+              {!sourceCameraAvailable && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
+                  No {cameraSource === "oak" ? "OAK-D Lite RGB bridge" : "webcam"} device is available. Select an available camera or connect the device before starting.
+                </p>
+              )}
             </div>
             <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-lg border border-slate-300 bg-slate-950">
               <video ref={videoRef} muted playsInline className="h-full max-h-64 w-full object-cover" />
@@ -298,7 +310,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerif
           {notice && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">{notice}</p>}
           {cameraError && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{cameraError}</p>}
           {serviceError && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">{serviceError}</p>}
-          {(serviceError || cameraError || (status !== null && !status.registered) || result?.depth?.unavailable) && (
+          {enabled && (serviceError || cameraError || (status !== null && !status.registered) || result?.depth?.unavailable) && (
             <button
               type="button"
               className="ev-button secondary w-full"
@@ -307,6 +319,7 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerif
                 onEnabledChange?.(false);
                 setResult(null);
                 stopCamera();
+                onFallback?.();
               }}
             >
               Continue without face verification
@@ -314,9 +327,20 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange }: { onVerif
           )}
         </>
       ) : (
-        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-          Face verification is disabled. The existing smartcard and voter check-in flow remains available without biometric verification.
-        </p>
+        <>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            Face verification is disabled. The existing smartcard and voter check-in flow remains available without biometric verification.
+          </p>
+          {fallbackAvailable && (
+            <button
+              type="button"
+              className="ev-button secondary w-full"
+              onClick={() => onFallback?.()}
+            >
+              Continue this smartcard check-in without face verification
+            </button>
+          )}
+        </>
       )}
 
       <p className="text-[10px] leading-relaxed text-slate-500">
