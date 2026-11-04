@@ -221,10 +221,10 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
   };
 
   const selectedCamera = devices.find((device) => device.deviceId === deviceId);
+  const isOakCamera = cameraSource === "oak";
+  const isWebcam = !isOakCamera;
   const sourceCameraAvailable = isOakCamera || devices.some((device) => device.source === "webcam");
   const showCameraControls = enabled || status?.registered === false;
-  const isOakCamera = isOakCamera;
-  const isWebcam = !isOakCamera;
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
