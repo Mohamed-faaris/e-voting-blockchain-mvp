@@ -2,6 +2,7 @@ import { createDatabase } from "@evoting/database";
 import type { Block } from "./blockchain/types.js";
 import { createGenesisBlock } from "./blockchain/chain.js";
 import { buildDemoLedgerBlocks } from "./seed-demo-data.js";
+import { toPostgresTimestamp } from "./storage/postgres-date.js";
 
 const { client } = createDatabase();
 function toJson(value: unknown) {
@@ -29,7 +30,7 @@ try {
       genesis = createGenesisBlock("DEMO-DISTRICT");
       await client`
         INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
-        VALUES (${genesis.index}, ${genesis.districtId}, ${new Date(genesis.timestamp)}, ${genesis.previousHash},
+        VALUES (${genesis.index}, ${genesis.districtId}, ${toPostgresTimestamp(genesis.timestamp)}, ${genesis.previousHash},
                 ${genesis.merkleRoot}, ${genesis.hash}, ${client.json(toJson(genesis))})
       `;
     }
@@ -45,13 +46,13 @@ try {
       for (const block of blocks) {
         await tx`
           INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
-          VALUES (${block.index}, ${block.districtId}, ${new Date(block.timestamp)}, ${block.previousHash},
+          VALUES (${block.index}, ${block.districtId}, ${toPostgresTimestamp(block.timestamp)}, ${block.previousHash},
                   ${block.merkleRoot}, ${block.hash}, ${tx.json(toJson(block))})
         `;
         for (const ballot of block.transactions) {
           const voterId = voterIdsByToken.get(ballot.tokenId);
           if (!voterId) throw new Error(`No matching voter for seeded token ${ballot.tokenId}`);
-          const createdAt = new Date(ballot.createdAt);
+          const createdAt = toPostgresTimestamp(ballot.createdAt);
           await tx`
             INSERT INTO voting_tokens (token_id, voter_id, status, created_at, spent_at)
             VALUES (${ballot.tokenId}, ${voterId}, 'SPENT', ${createdAt}, ${createdAt})
