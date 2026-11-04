@@ -2,6 +2,7 @@ import { createDatabase } from "@evoting/database";
 import type { Block, Voter, Candidate } from "../blockchain/types.js";
 import { createGenesisBlock, createBlock, validateChain, createTransaction } from "../blockchain/chain.js";
 import { generateEd25519KeyPair } from "../blockchain/crypto.js";
+import { toPostgresTimestamp } from "./postgres-date.js";
 
 export const CANDIDATES: Candidate[] = [
   { id: "cand-1", name: "Alice Rivera", party: "Digital Democracy Party", symbol: "DDP" },
@@ -94,7 +95,7 @@ export const storage = {
       }
 
       await tx`INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
-        VALUES (${block.index}, ${block.districtId}, ${new Date(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${tx.json(toDatabaseJson(block))})`;
+        VALUES (${block.index}, ${block.districtId}, ${toPostgresTimestamp(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${tx.json(toDatabaseJson(block))})`;
       for (const item of block.transactions) {
         await tx`INSERT INTO transactions (id, block_index, token_id, district_id, payload_json)
           VALUES (${item.id}, ${block.index}, ${item.tokenId}, ${item.districtId}, ${tx.json(toDatabaseJson(item))})`;
@@ -112,7 +113,7 @@ export const storage = {
   async saveBlock(block: Block): Promise<void> {
     await client.begin(async (tx) => {
       await tx`INSERT INTO blocks (block_index, district_id, timestamp, previous_hash, merkle_root, block_hash, payload_json)
-        VALUES (${block.index}, ${block.districtId}, ${new Date(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${tx.json(toDatabaseJson(block))})`;
+        VALUES (${block.index}, ${block.districtId}, ${toPostgresTimestamp(block.timestamp)}, ${block.previousHash}, ${block.merkleRoot}, ${block.hash}, ${tx.json(toDatabaseJson(block))})`;
       for (const item of block.transactions) {
         await tx`INSERT INTO transactions (id, block_index, token_id, district_id, payload_json)
           VALUES (${item.id}, ${block.index}, ${item.tokenId}, ${item.districtId}, ${tx.json(toDatabaseJson(item))})`;
