@@ -22,7 +22,6 @@ let faceDetectorLoad: Promise<void> | null = null;
 function loadBrowserFaceDetector(): Promise<void> {
   if (!faceDetectorLoad) {
     faceDetectorLoad = (async () => {
-      await faceapi.tf.ready();
       await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_PATH);
     })().catch((error) => {
       faceDetectorLoad = null;
@@ -160,20 +159,21 @@ export function FaceVerificationPanel({ onVerified, onEnabledChange, onFallback,
       source: HTMLVideoElement | HTMLImageElement,
       detections: faceapi.FaceDetection[],
     ) => {
-      const context = canvas.getContext("2d");
+      const overlayCanvas = canvas;
+      const context = overlayCanvas.getContext("2d");
       if (!context) return;
 
       const frameWidth = source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
       const frameHeight = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
-      const bounds = canvas.getBoundingClientRect();
+      const bounds = overlayCanvas.getBoundingClientRect();
       if (!frameWidth || !frameHeight || !bounds.width || !bounds.height) return;
 
       const pixelRatio = window.devicePixelRatio || 1;
       const width = Math.round(bounds.width * pixelRatio);
       const height = Math.round(bounds.height * pixelRatio);
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
+      if (overlayCanvas.width !== width || overlayCanvas.height !== height) {
+        overlayCanvas.width = width;
+        overlayCanvas.height = height;
       }
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.clearRect(0, 0, bounds.width, bounds.height);
