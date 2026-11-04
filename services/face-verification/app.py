@@ -364,28 +364,26 @@ def delete_enrollment():
 
 def oak_device_status():
     status = OAK_CAMERA.status(probe=True)
-    error = status.get("error")
     return {
-        "backend": "depthai",
+        "backend": "depthai-v2",
         "rgb": {
             "available": status["rgb"],
-            "device": f"DepthAI CAM_A ({status['device_id'] or 'OAK-D Lite'})",
-            "error": error,
+            "device": f"DepthAI CAM_A ({status["device_id"] or 'OAK-D Lite'})",
+            "error": status["rgb_error"],
         },
         "depth": {
             "available": status["depth"],
-            "socket": "DepthAI StereoDepth synchronized output",
-            "error": error,
+            "socket": "DepthAI StereoDepth (CAM_B + CAM_C), aligned to CAM_A",
+            "error": status["depth_error"],
         },
-        "ready": status["available"],
+        "ready": status["rgb"] and status["depth"],
         "device_id": status["device_id"],
         "sdk_version": status["sdk_version"],
         "resolution": status["resolution"],
         "fps": status["fps"],
-        "synchronized": status["synchronized"],
+        "synchronized": False,
         "depth_aligned_to": status["depth_aligned_to"],
     }
-
 
 @app.get("/camera/oak/status")
 def oak_camera_status():
