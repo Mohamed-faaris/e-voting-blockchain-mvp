@@ -33,7 +33,7 @@ def main() -> int:
         print("PASS: 10 synchronized RGB/depth frames received directly through DepthAI.")
         print("Saved oak_rgb_test.jpg and oak_depth_test.png in the current directory.")
         return 0
-    except (OakCameraError, Exception) as exc:
+    except Exception as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
     finally:
