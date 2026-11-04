@@ -57,10 +57,12 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
   const handleFaceModeChange = (enabled: boolean) => {
     setFaceCheckEnabled(enabled);
     onFaceModeChange?.(enabled);
-    if (!enabled && pendingVoterId) {
-      onCardTapped(pendingVoterId);
-      setPendingVoterId(null);
-    }
+  };
+
+  const handleFaceFallback = () => {
+    if (!pendingVoterId) return;
+    onCardTapped(pendingVoterId);
+    setPendingVoterId(null);
   };
 
   return (
@@ -127,6 +129,8 @@ export const BoothHardwareSim: React.FC<BoothHardwareSimProps> = ({
       <FaceVerificationPanel
         onVerified={handleFaceVerified}
         onEnabledChange={handleFaceModeChange}
+        onFallback={handleFaceFallback}
+        fallbackAvailable={Boolean(pendingVoterId)}
       />
     </div>
   );
