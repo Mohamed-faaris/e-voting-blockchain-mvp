@@ -44,7 +44,7 @@ class DepthAIStreamHub:
         rgb.setVideoSize(640, 480)
         rgb.setFps(15)
         rgb.setInterleaved(False)
-        rgb.setColorOrder(dai.CameraBoardSocket.CAM_A and dai.ColorCameraProperties.ColorOrder.BGR)
+        rgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
 
         left = pipeline.create(dai.node.MonoCamera)
         left.setBoardSocket(dai.CameraBoardSocket.CAM_B)
