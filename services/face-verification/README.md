@@ -38,14 +38,14 @@ The service binds to loopback only. Keep it on the booth machine. The model down
 
 ## Frontend workflow
 
-1. Open Admin → Voter Check-in.
-2. Select either the default webcam or the OAK RGB camera from the browser camera list.
-3. Use the admin face registration action to enroll/replace the booth's single face template.
-4. Face verification is optional and disabled by default. Enable it in the Admin booth panel when required.
-5. Admins can register, replace or delete the single locally stored face template. The service accepts only a match against that enrolled template.
-6. When enabled, a smartcard tap is held pending until the enrolled face matches. OAK-D Lite additionally requires the stereo-depth heuristic to pass. A regular webcam performs face matching without depth.
-7. The manual roster authentication button is disabled while face verification is enabled, so it cannot bypass the face gate. Use the smartcard flow instead.
-8. If the service, camera, missing enrollment or depth bridge is operationally unavailable, an explicit “Continue without face verification” action allows the existing non-biometric check-in. A face mismatch or a valid depth frame that fails the depth heuristic does not expose this bypass.
+1. Start the local Python service and the existing OAK-D Lite RGB/depth bridge when OAK mode is required.
+2. Open Admin → Voter Check-in. Face enrollment and controls are available only in this Admin booth interface.
+3. Enable face verification to open the camera controls, then choose the default webcam or OAK-D Lite RGB bridge.
+4. Register the single administrator-approved face template. The service stores only its embedding in local SQLite; it does not retain captured frames. Admins can replace or delete the enrollment.
+5. Face verification is optional and disabled by default. When enabled, a smartcard tap remains pending until the enrolled face matches. OAK-D Lite additionally requires the stereo-depth heuristic to pass; a standard webcam performs face matching without depth.
+6. The selected camera source must have a matching browser video device. The UI prevents starting an OAK depth check with a missing OAK RGB device, avoiding a webcam RGB frame being compared against unrelated OAK depth.
+7. If the Python service, selected camera, enrollment or depth bridge is unavailable, the booth offers an explicit fallback to the existing non-biometric check-in. A face mismatch or a valid depth frame that fails the depth heuristic does not automatically expose that fallback.
+8. Disabling face verification does not silently authenticate a smartcard that is already pending; the operator must use the explicit fallback action to continue that check-in.
 
 ## API
 
